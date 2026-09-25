@@ -3,6 +3,31 @@ import { prisma } from "@/lib/prisma"
 
 export const dynamic = "force-dynamic"
 
+function buildHistory(weightLogs: { date: Date; weight: number }[]) {
+  if (weightLogs.length === 0) return []
+
+  const firstDate = new Date(weightLogs[0].date)
+  const lastDate = new Date(weightLogs.at(-1)?.date ?? firstDate)
+  const weightsByDate = new Map(
+    weightLogs.map((log) => [log.date.toISOString().slice(0, 10), log.weight]),
+  )
+  const history = []
+
+  for (const date = new Date(firstDate); date <= lastDate; date.setUTCDate(date.getUTCDate() + 1)) {
+    const dateKey = date.toISOString().slice(0, 10)
+    history.push({
+      date: date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "2-digit",
+        timeZone: "UTC",
+      }),
+      weight: weightsByDate.get(dateKey) ?? null,
+    })
+  }
+
+  return history
+}
+
 export default async function Home() {
   const plants = await prisma.plant.findMany({
     include: {
@@ -27,21 +52,15 @@ export default async function Home() {
         return {
           id: plant.id,
           name: plant.name,
-          species: plant.qualifier ?? "No qualifier",
           group: plant.wateringGroup?.name ?? "Unassigned",
+          wateringInterval: plant.wateringGroup?.intervalDays ?? null,
+          lastWatered: plant.weightLogs.at(-1)?.date.toISOString() ?? null,
           room: plant.wateringGroup?.intervalDays
             ? `Every ${plant.wateringGroup.intervalDays} days`
             : "No schedule",
           minWeight: plant.minWeight ?? latestWeight,
           maxWeight: plant.maxWeight ?? latestWeight,
-          history: plant.weightLogs.map((log) => ({
-            date: log.date.toLocaleDateString("en-US", {
-              month: "short",
-              day: "2-digit",
-              timeZone: "UTC",
-            }),
-            weight: log.weight,
-          })),
+          history: buildHistory(plant.weightLogs),
         }
       })}
     />
