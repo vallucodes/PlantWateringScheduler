@@ -1,0 +1,46 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model WateringGroup {
+  id                String  @id @default(cuid())
+  key               String  @unique
+  name              String
+  intervalDays      Int?
+  plants            Plant[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Plant {
+  id                String        @id @default(cuid())
+  name              String
+  minWeight         Float?
+  maxWeight         Float?
+  sourceRow         Int           @unique
+  wateringGroupId   String?
+  wateringGroup     WateringGroup? @relation(fields: [wateringGroupId], references: [id], onDelete: SetNull)
+  weightLogs        WeightLog[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model WeightLog {
+  id        String   @id @default(cuid())
+  weight    Float
+  date      DateTime
+  plantId   String
+  plant     Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([plantId, date])
+  @@index([date])
+}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -56,7 +56,7 @@ export type Plant = {
 }
 
 const scheduleGroups = [
-  { name: "20-31", lastWatered: "07.09", intervalStart: 20, intervalEnd: 31 },
+  { name: "20 - 31", lastWatered: "07.09", intervalStart: 20, intervalEnd: 31 },
   { name: "20", lastWatered: "07.09", intervalStart: 20, intervalEnd: 20 },
   { name: "14", lastWatered: "07.09", intervalStart: 14, intervalEnd: 14 },
   { name: "9", lastWatered: "10.09", intervalStart: 9, intervalEnd: 9 },
@@ -65,6 +65,22 @@ const scheduleGroups = [
   { name: "2", lastWatered: "23.09", intervalStart: 2, intervalEnd: 2 },
   { name: "Unassigned", lastWatered: null, intervalStart: null, intervalEnd: null },
 ]
+
+const groupColorPalette = [
+  { accent: "#ffffff", row: "rgba(124, 75, 153, 0.5)", border: "rgba(124, 75, 153, 0.8)" },
+  { accent: "#ffffff", row: "rgba(198, 91, 43, 0.5)", border: "rgba(198, 91, 43, 0.8)" },
+  { accent: "#ffffff", row: "rgba(219, 137, 21, 0.5)", border: "rgba(217, 149, 53, 0.8)" },
+  { accent: "#ffffff", row: "rgba(217, 191, 46, 0.5)", border: "rgba(217, 163, 46, 0.8)" },
+  { accent: "#ffffff", row: "rgba(113, 184, 129, 0.5)", border: "rgba(114, 168, 127, 0.8)" },
+  { accent: "#ffffff", row: "rgba(96, 122, 170, 0.5)", border: "rgba(111, 157, 120, 0.8)" },
+  { accent: "#ffffff", row: "rgba(102, 211, 219, 0.5)", border: "rgba(116, 167, 202, 0.8)" },
+  { accent: "#ffffff", row: "rgba(112, 124, 128, 0.5)", border: "rgba(142, 151, 165, 0.8)" },
+] as const
+
+function colorForGroup(group: string) {
+  const groupIndex = scheduleGroups.findIndex((scheduleGroup) => scheduleGroup.name === group)
+  return groupColorPalette[groupIndex >= 0 ? groupIndex : groupColorPalette.length - 1]
+}
 
 function formatScheduleDate(date: Date) {
   const day = String(date.getUTCDate()).padStart(2, "0")
@@ -97,11 +113,12 @@ function daysFromToday(date: Date) {
   return Math.round((date.getTime() - todayUtc) / (24 * 60 * 60 * 1000))
 }
 
-function WateringSchedule() {
+function WateringSchedule({ plants, query, onPlantUpdated }: { plants: Plant[]; query: string; onPlantUpdated: (plantId: string, group: string, wateringInterval: number | null) => void }) {
   const [lastWateredDates, setLastWateredDates] = useState<Record<string, Date | null>>(
     () => Object.fromEntries(scheduleGroups.map((group) => [group.name, group.lastWatered ? parseScheduleDate(group.lastWatered) : null])),
   )
   const [season, setSeason] = useState<"summer" | "winter">("summer")
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const intervalMultiplier = season === "winter" ? 2 : 1
 
   const updateLastWatered = (groupName: string, date: Date | null) => {
@@ -121,6 +138,7 @@ function WateringSchedule() {
       group: group.name,
       lastWatered: group.lastWatered,
       nextWateringDates,
+      plants: plants.filter((plant) => plant.group === group.name && plant.name.toLowerCase().includes(query.toLowerCase())),
     }
   })
 
@@ -131,13 +149,28 @@ function WateringSchedule() {
         <span>Last watered</span>
         <span>Next watering</span>
       </div>
-      {rows.map((row) => (
-        <div key={row.group} className="grid grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] items-center gap-4 border-b border-[#e8ede6] px-1 py-3.5 text-sm last:border-b-0 sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)]">
+      {rows.map((row) => {
+        const groupColor = colorForGroup(row.group)
+        const isExpanded = expandedGroups[row.group] ?? false
+        return <div key={row.group} className="border-b last:border-b-0" style={{ borderColor: groupColor.border }}>
+          <div
+            role="button"
+            tabIndex={0}
+            aria-expanded={isExpanded}
+            onClick={() => setExpandedGroups((current) => ({ ...current, [row.group]: !isExpanded }))}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault()
+                setExpandedGroups((current) => ({ ...current, [row.group]: !isExpanded }))
+              }
+            }}
+            style={{ backgroundColor: groupColor.row }}
+            className="grid cursor-pointer grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] items-center gap-4 px-1 py-3.5 text-sm transition-colors hover:brightness-110 sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)]"
+          >
           <div>
-            <p className="font-medium text-[#315d42]">{row.group}</p>
-            <p className="mt-0.5 text-xs text-[#9aa39b]">{row.group === "Unassigned" ? "No interval" : `${row.group} days`}</p>
+            <p style={{ color: groupColor.accent }} className="flex items-center gap-2 font-bold"><ChevronDown className={`size-4 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />{row.group}</p>
           </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
             <div className="flex min-w-0 items-center gap-1.5">
               {row.lastWatered ? (
                 <span className="relative inline-flex size-5 items-center justify-center text-[#55705a]" title={`Set last watered date for ${row.group}`}>
@@ -151,7 +184,7 @@ function WateringSchedule() {
                   />
                 </span>
               ) : null}
-              <span className="text-[#78847a]">{row.lastWatered ? formatScheduleDate(lastWateredDates[row.group] as Date) : "Not recorded"}</span>
+              <span className="font-bold text-white">{row.lastWatered ? formatScheduleDate(lastWateredDates[row.group] as Date) : "Not recorded"}</span>
             </div>
             <Button
               type="button"
@@ -175,8 +208,10 @@ function WateringSchedule() {
           ) : (
             <span className="font-medium text-[#1f3428]">Not recorded</span>
           )}
+          </div>
+          {isExpanded && row.plants.length > 0 ? <div className="col-span-full -mx-1 sm:-mx-4">{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} onUpdated={(nextGroup, wateringInterval) => onPlantUpdated(plant.id, nextGroup, wateringInterval)} />)}</div> : null}
         </div>
-      ))}
+      })}
       <div className="flex items-center justify-between gap-3 border-t border-[#d8dfd5] px-1 py-3">
         <span className="text-xs text-[#78847a]">Watering season</span>
         <button
@@ -465,16 +500,17 @@ function PlantScheduleEditor({ plant, onUpdated }: { plant: Plant; onUpdated: (g
 function PlantCard({ plant, onUpdated, onDeleted, onNameUpdated }: { plant: Plant; onUpdated: (group: string, wateringInterval: number | null) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
   const { current, percentage } = getMoisture(plant)
   const status = statusFor(percentage)
+  const groupColor = colorForGroup(plant.group)
   const statusColor = status.tone === "danger" ? "text-[#bd5b45]" : status.tone === "warning" ? "text-[#a4772b]" : "text-[#467555]"
   const barColor = status.tone === "danger" ? "bg-[#cf7459]" : status.tone === "warning" ? "bg-[#d2a34a]" : "bg-[#6f9d78]"
 
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <button className="group grid w-full gap-4 border-t border-[#e4e9e1] px-1 py-4 text-left transition-colors hover:bg-[#f6f8f3] sm:grid-cols-[minmax(13rem,1.25fr)_minmax(12rem,1fr)_minmax(7rem,auto)] sm:items-center sm:px-4">
-          <div className="flex min-w-0 items-center gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#dfe9d7] text-[#315d42]"><Sprout className="size-4" /></div><div className="min-w-0"><p className="truncate font-semibold text-[#1f3428]">{plant.name}</p><p className="mt-0.5 text-xs text-[#78847a]">{plant.room}</p></div></div>
-          <div className="min-w-0"><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className={`font-medium ${statusColor}`}>{status.label}</span><span className="shrink-0 text-[#78847a]">{percentage}% of range</span></div><div className="h-2 overflow-hidden rounded-full bg-[#e7ece4]"><div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${percentage}%` }} /></div></div>
-          <div className="flex items-center justify-between gap-3 sm:justify-end"><div className="text-left sm:text-right"><p className="font-heading text-xl font-semibold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-xs font-normal text-[#78847a]">g</span></p><p className="text-[10px] uppercase tracking-[0.12em] text-[#9aa39b]">last weight</p></div><ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" /></div>
+        <button style={{ backgroundColor: groupColor.row, borderColor: groupColor.border }} className="group grid w-full gap-4 border-t px-1 py-4 text-left transition-colors hover:brightness-110 sm:grid-cols-[minmax(13rem,1.25fr)_minmax(12rem,1fr)_minmax(7rem,auto)] sm:items-center sm:px-4">
+          <div className="flex min-w-0 items-center gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#dfe9d7] text-[#315d42]"><Sprout className="size-4" /></div><div className="min-w-0"><p className="truncate font-semibold text-[#1f3428]">{plant.name}</p></div></div>
+          <div className="min-w-0"><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className={`font-medium ${statusColor}`}>{status.label}</span><span className="shrink-0 text-white">{percentage}% of range</span></div><div className="h-2 overflow-hidden rounded-full bg-[#e7ece4]"><div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${percentage}%` }} /></div></div>
+          <div className="flex items-center justify-between gap-3 sm:justify-end"><div className="text-left sm:text-right"><p className="font-heading text-xl font-semibold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-xs font-normal text-white">g</span></p><p className="text-[10px] uppercase tracking-[0.12em] text-white">last weight</p></div><ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" /></div>
         </button>
       </DialogTrigger>
       <PlantHistory plant={plant} percentage={percentage} onUpdated={onUpdated} onDeleted={onDeleted ?? (() => window.location.reload())} onNameUpdated={onNameUpdated ?? (() => window.location.reload())} />
@@ -557,26 +593,18 @@ function CreatePlantDialog({ onCreated }: { onCreated: (plant: Plant) => void })
 export default function PlantDashboard({ plants, lastUpdated }: { plants: Plant[]; lastUpdated: string }) {
   const [plantList, setPlantList] = useState(plants)
   const [query, setQuery] = useState("")
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
-  const groupedPlants = useMemo(() => {
-    const search = query.toLowerCase()
-    const matchingPlants = plantList.filter((plant) => plant.name.toLowerCase().includes(search))
-    return Array.from(new Set(matchingPlants.map((plant) => plant.group))).map((group) => ({
-      group,
-      plants: matchingPlants.filter((plant) => plant.group === group),
-    }))
-  }, [plantList, query])
   const needsAttention = plantList.filter((plant) => getMoisture(plant).percentage < 50).length
 
   return (
     <main className="report-shell min-h-screen bg-[#0f1013] text-[#e7e9ed]">
       <CreatePlantDialog onCreated={(plant) => setPlantList((current) => [plant, ...current])} />
-      <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col bg-[#111318] shadow-[0_0_80px_rgba(0,0,0,0.24)]">
+      <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col bg-[#21242c] shadow-[0_0_80px_rgba(0,0,0,0.24)]">
         <header className="flex items-center justify-between border-b border-[#e0e6dd] px-5 py-4 sm:px-10 lg:px-14"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-[#315d42] text-[#e8f2e0]"><Droplets className="size-4" /></div><span className="font-heading text-lg font-semibold tracking-tight">verdant</span></div><div className="flex items-center gap-2"><span className="hidden text-xs text-[#78847a] sm:inline">Last measurement {lastUpdated}</span><Button variant="ghost" size="icon" aria-label="Sign in" className="text-[#55705a] hover:bg-[#eef3eb]"><LogIn className="size-4" /></Button></div></header>
-        <section className="border-b border-[#e0e6dd] px-5 pb-10 pt-10 sm:px-10 lg:px-14 lg:pb-12 lg:pt-14"><div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="max-w-xl font-heading text-4xl font-semibold tracking-[-0.04em] text-[#1f3428] sm:text-5xl">A little care goes a long way.</h1><p className="mt-4 max-w-lg text-sm leading-6 text-[#78847a]">Keep an eye on the quiet signals. Your plants are telling you when it is time for a drink.</p></div><div className="flex shrink-0 gap-8 border-l border-[#d8dfd5] pl-6"><div><p className="text-3xl font-semibold tracking-tight text-[#315d42]">{plantList.length}</p><p className="mt-1 text-xs text-[#78847a]">plants tracked</p></div><div><p className="flex items-center gap-1 text-3xl font-semibold tracking-tight text-[#bd5b45]">{needsAttention}<ArrowDownRight className="size-5" /></p><p className="mt-1 text-xs text-[#78847a]">need attention</p></div></div></div><WateringSchedule /></section>
-        <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7 flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a plant to see its weight story.</p></div><div className="flex items-center gap-2"><div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#9aa39b]" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plants" className="h-9 w-full border-[#d8dfd5] bg-[#f7f9f5] pl-9 text-sm md:w-44" />{query && <button aria-label="Clear search" onClick={() => setQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9aa39b]"><X className="size-3.5" /></button>}</div><Button variant="outline" size="icon" aria-label="Add plant" className="h-9 w-9 border-[#d8dfd5] text-[#315d42]"><Plus className="size-4" /></Button></div></div>{groupedPlants.length > 0 ? <div className="overflow-hidden border-y border-[#d8dfd5]">{groupedPlants.map(({ group, plants: groupPlants }) => { const isExpanded = expandedGroups[group] ?? true; return <div key={group} className="border-b border-[#d8dfd5] last:border-b-0"><button type="button" onClick={() => setExpandedGroups((current) => ({ ...current, [group]: !isExpanded }))} aria-expanded={isExpanded} className="flex w-full items-center justify-between gap-4 bg-[#f4f7f1] px-1 py-3 text-left transition-colors hover:bg-[#edf3e9] sm:px-4"><span className="flex min-w-0 items-center gap-2"><span className="text-sm font-semibold text-[#315d42]">{group}</span><span className="text-xs text-[#9aa39b]">{groupPlants.length} {groupPlants.length === 1 ? "plant" : "plants"}</span></span><ChevronDown className={`size-4 shrink-0 text-[#55705a] transition-transform ${isExpanded ? "" : "-rotate-90"}`} /></button>{isExpanded ? <div>{groupPlants.map((plant) => <PlantCard key={plant.id} plant={plant} onUpdated={(nextGroup, wateringInterval) => setPlantList((current) => current.map((currentPlant) => currentPlant.id === plant.id ? { ...currentPlant, group: nextGroup, wateringInterval, room: wateringInterval ? `Every ${wateringInterval} days` : "No schedule" } : currentPlant))} />)}</div> : null}</div>})}</div> : <div className="py-16 text-center"><p className="font-heading text-lg font-semibold">No plants found</p><p className="mt-1 text-sm text-[#78847a]">Try a different search or collection.</p></div>}</section>
+        <section className="border-b border-[#e0e6dd] px-5 pb-10 pt-10 sm:px-10 lg:px-14 lg:pb-12 lg:pt-14"><div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="max-w-xl font-heading text-4xl font-semibold tracking-[-0.04em] text-[#1f3428] sm:text-5xl">A little care goes a long way.</h1><p className="mt-4 max-w-lg text-sm leading-6 text-[#78847a]">Keep an eye on the quiet signals. Your plants are telling you when it is time for a drink.</p></div><div className="flex shrink-0 gap-8 border-l border-[#d8dfd5] pl-6"><div><p className="text-3xl font-semibold tracking-tight text-[#315d42]">{plantList.length}</p><p className="mt-1 text-xs text-[#78847a]">plants tracked</p></div><div><p className="flex items-center gap-1 text-3xl font-semibold tracking-tight text-[#bd5b45]">{needsAttention}<ArrowDownRight className="size-5" /></p><p className="mt-1 text-xs text-[#78847a]">need attention</p></div></div></div></section>
+        <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7 flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a group to see its plants.</p></div><div className="flex items-center gap-2"><div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#9aa39b]" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plants" className="h-9 w-full border-[#d8dfd5] bg-[#f7f9f5] pl-9 text-sm md:w-44" />{query && <button aria-label="Clear search" onClick={() => setQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9aa39b]"><X className="size-3.5" /></button>}</div><Button variant="outline" size="icon" aria-label="Add plant" className="h-9 w-9 border-[#d8dfd5] text-[#315d42]"><Plus className="size-4" /></Button></div></div><WateringSchedule plants={plantList} query={query} onPlantUpdated={(plantId, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, group: nextGroup, wateringInterval, room: wateringInterval ? `Every ${wateringInterval} days` : "No schedule" } : plant))} /></section>
         <footer className="flex flex-col justify-between gap-3 border-t border-[#e0e6dd] px-5 py-5 text-xs text-[#8b968d] sm:flex-row sm:px-10 lg:px-14"><p className="flex items-center gap-2"><CalendarDays className="size-3.5" /> Weight history is your most reliable watering signal.</p><p className="flex items-center gap-1 text-[#6f896f]"><ArrowUpRight className="size-3.5" /> All systems growing</p></footer>
       </div>
     </main>
   )
 }
+// #21242c
