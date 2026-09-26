@@ -55,7 +55,14 @@ export type Plant = {
   history: { date: string; weight: number | null }[]
 }
 
-const scheduleGroups = [
+type ScheduleGroup = {
+  name: string
+  lastWatered: string | null
+  intervalStart: number | null
+  intervalEnd: number | null
+}
+
+const scheduleGroups: ScheduleGroup[] = [
   { name: "20 - 31", lastWatered: "07.09", intervalStart: 20, intervalEnd: 31 },
   { name: "20", lastWatered: "07.09", intervalStart: 20, intervalEnd: 20 },
   { name: "14", lastWatered: "07.09", intervalStart: 14, intervalEnd: 14 },

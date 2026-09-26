@@ -4,6 +4,15 @@ function parseWeight(value: unknown) {
   return value === "" || value === null || value === undefined ? null : Number(value)
 }
 
+function winterGroupFor(group: { key: string; name: string; intervalDays: number | null }) {
+  const intervalDays = group.intervalDays === null ? null : group.intervalDays * 2
+  return {
+    key: `winter:${group.key}`,
+    name: intervalDays === null ? `Winter ${group.name}` : String(intervalDays),
+    intervalDays,
+  }
+}
+
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
   const name = typeof body?.name === "string" ? body.name.trim() : ""
@@ -33,6 +42,16 @@ export async function POST(request: Request) {
       update: { name: intervalDays === null ? "Unassigned" : groupKey, intervalDays },
       create: { key: groupKey, name: intervalDays === null ? "Unassigned" : groupKey, intervalDays },
     })
+    const winterGroup = winterGroupFor({
+      key: groupKey,
+      name: intervalDays === null ? "Unassigned" : groupKey,
+      intervalDays,
+    })
+    const winterWateringGroup = await transaction.wateringGroup.upsert({
+      where: { key: winterGroup.key },
+      update: { name: winterGroup.name, intervalDays: winterGroup.intervalDays },
+      create: winterGroup,
+    })
 
     return transaction.plant.create({
       data: {
@@ -41,6 +60,7 @@ export async function POST(request: Request) {
         maxWeight,
         sourceRow,
         wateringGroupId: wateringGroup.id,
+        winterWateringGroupId: winterWateringGroup.id,
       },
     })
   })

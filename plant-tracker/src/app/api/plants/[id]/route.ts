@@ -1,5 +1,14 @@
 import { prisma } from "@/lib/prisma"
 
+function winterGroupFor(group: { key: string; name: string; intervalDays: number | null }) {
+  const intervalDays = group.intervalDays === null ? null : group.intervalDays * 2
+  return {
+    key: `winter:${group.key}`,
+    name: intervalDays === null ? `Winter ${group.name}` : String(intervalDays),
+    intervalDays,
+  }
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await request.json().catch(() => null)
@@ -34,10 +43,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         update: { name: String(intervalDays), intervalDays },
         create: { key: String(intervalDays), name: String(intervalDays), intervalDays },
       })
+  const winterGroup = winterGroupFor({
+    key: wateringGroup.key,
+    name: wateringGroup.name,
+    intervalDays: wateringGroup.intervalDays,
+  })
+  const winterWateringGroup = await prisma.wateringGroup.upsert({
+    where: { key: winterGroup.key },
+    update: { name: winterGroup.name, intervalDays: winterGroup.intervalDays },
+    create: winterGroup,
+  })
 
   await prisma.plant.update({
     where: { id },
-    data: { ...(hasName ? { name } : {}), wateringGroupId: wateringGroup.id },
+    data: { ...(hasName ? { name } : {}), wateringGroupId: wateringGroup.id, winterWateringGroupId: winterWateringGroup.id },
   })
 
   return Response.json({ name: hasName ? name : plant.name, group: wateringGroup.name, wateringInterval: wateringGroup.intervalDays })

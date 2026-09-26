@@ -39,6 +39,15 @@ function parseGroup(value) {
   };
 }
 
+function parseWinterGroup(group) {
+  const intervalDays = group.intervalDays === null ? null : group.intervalDays * 2;
+  return {
+    key: `winter:${group.key}`,
+    name: intervalDays === null ? `Winter ${group.name}` : String(intervalDays),
+    intervalDays,
+  };
+}
+
 function isPlantRow(row) {
   const name = textOrNull(row[2]);
   return Boolean(typeof row[2] === "string" && name && name !== "seuraava" && (isNumber(row[3]) || isNumber(row[4])));
@@ -78,6 +87,12 @@ async function main() {
           update: { name: group.name, intervalDays: group.intervalDays },
           create: group,
         });
+        const winterGroup = parseWinterGroup(group);
+        const winterWateringGroup = await transaction.wateringGroup.upsert({
+          where: { key: winterGroup.key },
+          update: { name: winterGroup.name, intervalDays: winterGroup.intervalDays },
+          create: winterGroup,
+        });
         importedGroups.add(group.key);
 
         const plant = await transaction.plant.upsert({
@@ -87,6 +102,7 @@ async function main() {
             minWeight: isNumber(row[3]) ? row[3] : null,
             maxWeight: isNumber(row[4]) ? row[4] : null,
             wateringGroupId: wateringGroup.id,
+            winterWateringGroupId: winterWateringGroup.id,
           },
           create: {
             name: textOrNull(row[2]),
@@ -94,6 +110,7 @@ async function main() {
             maxWeight: isNumber(row[4]) ? row[4] : null,
             sourceRow,
             wateringGroupId: wateringGroup.id,
+            winterWateringGroupId: winterWateringGroup.id,
           },
         });
 
