@@ -125,7 +125,19 @@ function WateringSchedule({ plants, query, onPlantUpdated, onWeightAdded }: { pl
     setLastWateredDates((current) => ({ ...current, [groupName]: date }))
   }
 
-  const rows = scheduleGroups.map((group) => {
+  const groups = [...scheduleGroups]
+  for (const plant of plants) {
+    if (!groups.some((group) => group.name === plant.group)) {
+      groups.push({
+        name: plant.group,
+        lastWatered: null,
+        intervalStart: plant.wateringInterval,
+        intervalEnd: plant.wateringInterval,
+      })
+    }
+  }
+
+  const rows = groups.map((group) => {
     const lastWateredDate = lastWateredDates[group.name]
     const nextWateringDates = lastWateredDate && group.intervalStart !== null && group.intervalEnd !== null
       ? group.intervalStart === group.intervalEnd
@@ -135,7 +147,7 @@ function WateringSchedule({ plants, query, onPlantUpdated, onWeightAdded }: { pl
 
     return {
       group: group.name,
-      lastWatered: group.lastWatered,
+      lastWatered: lastWateredDate,
       nextWateringDates,
       plants: plants.filter((plant) => plant.group === group.name && plant.name.toLowerCase().includes(query.toLowerCase())),
     }
