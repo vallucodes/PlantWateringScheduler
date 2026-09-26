@@ -113,7 +113,7 @@ function daysFromToday(date: Date) {
   return Math.round((date.getTime() - todayUtc) / (24 * 60 * 60 * 1000))
 }
 
-function WateringSchedule({ plants, query, onPlantUpdated }: { plants: Plant[]; query: string; onPlantUpdated: (plantId: string, group: string, wateringInterval: number | null) => void }) {
+function WateringSchedule({ plants, query, onPlantUpdated, onWeightAdded }: { plants: Plant[]; query: string; onPlantUpdated: (plantId: string, group: string, wateringInterval: number | null) => void; onWeightAdded: (plantId: string, date: string, weight: number) => void }) {
   const [lastWateredDates, setLastWateredDates] = useState<Record<string, Date | null>>(
     () => Object.fromEntries(scheduleGroups.map((group) => [group.name, group.lastWatered ? parseScheduleDate(group.lastWatered) : null])),
   )
@@ -127,7 +127,6 @@ function WateringSchedule({ plants, query, onPlantUpdated }: { plants: Plant[]; 
 
   const rows = scheduleGroups.map((group) => {
     const lastWateredDate = lastWateredDates[group.name]
-
     const nextWateringDates = lastWateredDate && group.intervalStart !== null && group.intervalEnd !== null
       ? group.intervalStart === group.intervalEnd
         ? [addDays(lastWateredDate, group.intervalStart * intervalMultiplier)]
@@ -209,7 +208,7 @@ function WateringSchedule({ plants, query, onPlantUpdated }: { plants: Plant[]; 
             <span className="font-medium text-[#1f3428]">Not recorded</span>
           )}
           </div>
-          {isExpanded && row.plants.length > 0 ? <div className="col-span-full -mx-1 sm:-mx-4">{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} onUpdated={(nextGroup, wateringInterval) => onPlantUpdated(plant.id, nextGroup, wateringInterval)} />)}</div> : null}
+          {isExpanded && row.plants.length > 0 ? <div className="col-span-full -mx-1 sm:-mx-4">{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} onUpdated={(nextGroup, wateringInterval) => onPlantUpdated(plant.id, nextGroup, wateringInterval)} onWeightAdded={(date, weight) => onWeightAdded(plant.id, date, weight)} />)}</div> : null}
         </div>
       })}
       <div className="flex items-center justify-between gap-3 border-t border-[#d8dfd5] px-1 py-3">
@@ -242,6 +241,15 @@ function statusFor(percentage: number) {
   return { label: "Looking good", tone: "healthy" }
 }
 
+function getWeightAxis(dataMin: number, dataMax: number) {
+  const yAxisPadding = Math.max(10, (dataMax - dataMin) * 0.05)
+  const minimum = Math.floor((dataMin - yAxisPadding) / 5) * 5
+  const maximum = Math.ceil((dataMax + yAxisPadding) / 5) * 5
+  const ticks = Array.from({ length: Math.floor((maximum - minimum) / 5) + 1 }, (_, index) => minimum + index * 5)
+
+  return { domain: [minimum, maximum] as [number, number], ticks }
+}
+
 function PlantHistory({ plant, percentage, onUpdated, onDeleted, onNameUpdated }: { plant: Plant; percentage: number; onUpdated: (group: string, wateringInterval: number | null) => void; onDeleted: () => void; onNameUpdated: (name: string) => void }) {
   const [range, setRange] = useState({ startIndex: 0, endIndex: Math.max(0, plant.history.length - 1) })
   const [selectionStart, setSelectionStart] = useState<number | null>(null)
@@ -252,8 +260,7 @@ function PlantHistory({ plant, percentage, onUpdated, onDeleted, onNameUpdated }
   const visibleWeights = visibleHistory.flatMap((entry) => entry.weight === null ? [] : [entry.weight])
   const dataMin = Math.min(plant.minWeight, ...visibleWeights)
   const dataMax = Math.max(plant.maxWeight, ...visibleWeights)
-  const yAxisPadding = Math.max(10, (dataMax - dataMin) * 0.05)
-  const yAxisDomain: [number, number] = [dataMin - yAxisPadding, dataMax + yAxisPadding]
+  const weightAxis = getWeightAxis(dataMin, dataMax)
   const selectedStart = selectionStart !== null && selectionEnd !== null ? Math.min(selectionStart, selectionEnd) : range.startIndex
   const selectedEnd = selectionStart !== null && selectionEnd !== null ? Math.max(selectionStart, selectionEnd) : range.endIndex
   const selectedDates = plant.history.length > 0 ? `${plant.history[selectedStart].date} - ${plant.history[selectedEnd].date}` : "No dates"
@@ -339,7 +346,7 @@ function PlantHistory({ plant, percentage, onUpdated, onDeleted, onNameUpdated }
           <LineChart data={visibleHistory} margin={{ top: 10, right: 12, left: 0, bottom: 0 }} onMouseDown={handleChartMouseDown} onMouseMove={handleChartMouseMove} onMouseUp={handleChartMouseUp} onMouseLeave={handleChartMouseUp}>
             <CartesianGrid vertical={false} stroke="#e2e8df" />
             <XAxis dataKey="date" axisLine={false} tickLine={false} tickMargin={10} />
-            <YAxis domain={yAxisDomain} axisLine={false} tickLine={false} tickMargin={8} />
+            <YAxis domain={weightAxis.domain} ticks={weightAxis.ticks} axisLine={false} tickLine={false} tickMargin={8} />
             <Tooltip contentStyle={{ borderRadius: 8, borderColor: "#d8dfd5", backgroundColor: "#fbfcf8" }} formatter={(value) => [`${value}g`, "Weight"]} />
             {selectedStart !== selectedEnd && <ReferenceArea x1={plant.history[selectedStart].date} x2={plant.history[selectedEnd].date} fill="#9fbaa0" fillOpacity={0.28} stroke="#467555" strokeOpacity={0.6} />}
             <ReferenceLine y={plant.minWeight} stroke="#cf7459" strokeDasharray="4 4" label={{ value: "dry", position: "insideTopRight", fill: "#bd5b45", fontSize: 11 }} />
@@ -497,21 +504,51 @@ function PlantScheduleEditor({ plant, onUpdated }: { plant: Plant; onUpdated: (g
   )
 }
 
-function PlantCard({ plant, onUpdated, onDeleted, onNameUpdated }: { plant: Plant; onUpdated: (group: string, wateringInterval: number | null) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
+function PlantCard({ plant, onUpdated, onWeightAdded, onDeleted, onNameUpdated }: { plant: Plant; onUpdated: (group: string, wateringInterval: number | null) => void; onWeightAdded: (date: string, weight: number) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
   const { current, percentage } = getMoisture(plant)
   const status = statusFor(percentage)
   const groupColor = colorForGroup(plant.group)
+  const [weight, setWeight] = useState("")
+  const [isSavingWeight, setIsSavingWeight] = useState(false)
+  const [weightError, setWeightError] = useState<string | null>(null)
   const statusColor = status.tone === "danger" ? "text-[#bd5b45]" : status.tone === "warning" ? "text-[#a4772b]" : "text-[#467555]"
   const barColor = status.tone === "danger" ? "bg-[#cf7459]" : status.tone === "warning" ? "bg-[#d2a34a]" : "bg-[#6f9d78]"
+
+  const saveWeight = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const parsedWeight = Number(weight)
+    if (!Number.isFinite(parsedWeight) || parsedWeight < 0) {
+      setWeightError("Enter a valid weight.")
+      return
+    }
+
+    setWeightError(null)
+    setIsSavingWeight(true)
+    try {
+      const response = await fetch(`/api/plants/${plant.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weight: parsedWeight }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error ?? "Could not save weight.")
+      onWeightAdded(result.date, result.weight)
+      setWeight("")
+    } catch (saveError) {
+      setWeightError(saveError instanceof Error ? saveError.message : "Could not save weight.")
+    } finally {
+      setIsSavingWeight(false)
+    }
+  }
 
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <button style={{ backgroundColor: groupColor.row, borderColor: groupColor.border }} className="group grid w-full gap-4 border-t px-1 py-4 text-left transition-colors hover:brightness-110 sm:grid-cols-[minmax(13rem,1.25fr)_minmax(12rem,1fr)_minmax(7rem,auto)] sm:items-center sm:px-4">
+        <div role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click() } }} style={{ backgroundColor: groupColor.row, borderColor: groupColor.border }} className="group grid w-full gap-4 border-t px-1 py-4 text-left transition-colors hover:brightness-110 sm:grid-cols-[minmax(13rem,1.25fr)_minmax(12rem,1fr)_minmax(7rem,auto)] sm:items-center sm:px-4">
           <div className="flex min-w-0 items-center gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#dfe9d7] text-[#315d42]"><Sprout className="size-4" /></div><div className="min-w-0"><p className="truncate font-semibold text-[#1f3428]">{plant.name}</p></div></div>
           <div className="min-w-0"><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className={`font-medium ${statusColor}`}>{status.label}</span><span className="shrink-0 text-white">{percentage}% of range</span></div><div className="h-2 overflow-hidden rounded-full bg-[#e7ece4]"><div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${percentage}%` }} /></div></div>
-          <div className="flex items-center justify-between gap-3 sm:justify-end"><div className="text-left sm:text-right"><p className="font-heading text-xl font-semibold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-xs font-normal text-white">g</span></p><p className="text-[10px] uppercase tracking-[0.12em] text-white">last weight</p></div><ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" /></div>
-        </button>
+          <div className="flex items-center justify-between gap-3 sm:justify-end"><form onSubmit={saveWeight} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} className="flex items-center gap-1"><Input type="text" inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} placeholder="g" aria-label={`Add today's weight for ${plant.name}`} className="h-8 w-20 border-white/50 bg-black/20 px-2 text-sm text-white placeholder:text-white/70" disabled={isSavingWeight} /><button type="submit" className="sr-only">Save weight</button>{weightError ? <span className="text-xs text-white" role="alert">{weightError}</span> : null}</form><div className="text-left sm:text-right"><p className="font-heading text-xl font-semibold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-xs font-normal text-white">g</span></p><p className="text-[10px] uppercase tracking-[0.12em] text-white">last weight</p></div><ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" /></div>
+        </div>
       </DialogTrigger>
       <PlantHistory plant={plant} percentage={percentage} onUpdated={onUpdated} onDeleted={onDeleted ?? (() => window.location.reload())} onNameUpdated={onNameUpdated ?? (() => window.location.reload())} />
     </Dialog>
@@ -595,13 +632,24 @@ export default function PlantDashboard({ plants, lastUpdated }: { plants: Plant[
   const [query, setQuery] = useState("")
   const needsAttention = plantList.filter((plant) => getMoisture(plant).percentage < 50).length
 
+  const addWeight = (plantId: string, date: string, weight: number) => {
+    setPlantList((current) => current.map((plant) => {
+      if (plant.id !== plantId) return plant
+      const dateLabel = new Date(date).toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" })
+      const history = plant.history.some((entry) => entry.date === dateLabel)
+        ? plant.history.map((entry) => entry.date === dateLabel ? { ...entry, weight } : entry)
+        : [...plant.history, { date: dateLabel, weight }]
+      return { ...plant, history }
+    }))
+  }
+
   return (
     <main className="report-shell min-h-screen bg-[#0f1013] text-[#e7e9ed]">
       <CreatePlantDialog onCreated={(plant) => setPlantList((current) => [plant, ...current])} />
       <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col bg-[#21242c] shadow-[0_0_80px_rgba(0,0,0,0.24)]">
         <header className="flex items-center justify-between border-b border-[#e0e6dd] px-5 py-4 sm:px-10 lg:px-14"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-[#315d42] text-[#e8f2e0]"><Droplets className="size-4" /></div><span className="font-heading text-lg font-semibold tracking-tight">verdant</span></div><div className="flex items-center gap-2"><span className="hidden text-xs text-[#78847a] sm:inline">Last measurement {lastUpdated}</span><Button variant="ghost" size="icon" aria-label="Sign in" className="text-[#55705a] hover:bg-[#eef3eb]"><LogIn className="size-4" /></Button></div></header>
         <section className="border-b border-[#e0e6dd] px-5 pb-10 pt-10 sm:px-10 lg:px-14 lg:pb-12 lg:pt-14"><div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="max-w-xl font-heading text-4xl font-semibold tracking-[-0.04em] text-[#1f3428] sm:text-5xl">A little care goes a long way.</h1><p className="mt-4 max-w-lg text-sm leading-6 text-[#78847a]">Keep an eye on the quiet signals. Your plants are telling you when it is time for a drink.</p></div><div className="flex shrink-0 gap-8 border-l border-[#d8dfd5] pl-6"><div><p className="text-3xl font-semibold tracking-tight text-[#315d42]">{plantList.length}</p><p className="mt-1 text-xs text-[#78847a]">plants tracked</p></div><div><p className="flex items-center gap-1 text-3xl font-semibold tracking-tight text-[#bd5b45]">{needsAttention}<ArrowDownRight className="size-5" /></p><p className="mt-1 text-xs text-[#78847a]">need attention</p></div></div></div></section>
-        <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7 flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a group to see its plants.</p></div><div className="flex items-center gap-2"><div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#9aa39b]" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plants" className="h-9 w-full border-[#d8dfd5] bg-[#f7f9f5] pl-9 text-sm md:w-44" />{query && <button aria-label="Clear search" onClick={() => setQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9aa39b]"><X className="size-3.5" /></button>}</div><Button variant="outline" size="icon" aria-label="Add plant" className="h-9 w-9 border-[#d8dfd5] text-[#315d42]"><Plus className="size-4" /></Button></div></div><WateringSchedule plants={plantList} query={query} onPlantUpdated={(plantId, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, group: nextGroup, wateringInterval, room: wateringInterval ? `Every ${wateringInterval} days` : "No schedule" } : plant))} /></section>
+        <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7 flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a group to see its plants.</p></div><div className="flex items-center gap-2"><div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#9aa39b]" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plants" className="h-9 w-full border-[#d8dfd5] bg-[#f7f9f5] pl-9 text-sm md:w-44" />{query && <button aria-label="Clear search" onClick={() => setQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9aa39b]"><X className="size-3.5" /></button>}</div><Button variant="outline" size="icon" aria-label="Add plant" className="h-9 w-9 border-[#d8dfd5] text-[#315d42]"><Plus className="size-4" /></Button></div></div><WateringSchedule plants={plantList} query={query} onPlantUpdated={(plantId, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, group: nextGroup, wateringInterval, room: wateringInterval ? `Every ${wateringInterval} days` : "No schedule" } : plant))} onWeightAdded={addWeight} /></section>
         <footer className="flex flex-col justify-between gap-3 border-t border-[#e0e6dd] px-5 py-5 text-xs text-[#8b968d] sm:flex-row sm:px-10 lg:px-14"><p className="flex items-center gap-2"><CalendarDays className="size-3.5" /> Weight history is your most reliable watering signal.</p><p className="flex items-center gap-1 text-[#6f896f]"><ArrowUpRight className="size-3.5" /> All systems growing</p></footer>
       </div>
     </main>

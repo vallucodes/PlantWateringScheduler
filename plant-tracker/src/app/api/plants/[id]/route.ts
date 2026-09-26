@@ -14,8 +14,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (hasInterval && rawInterval !== null && (!Number.isInteger(rawInterval) || rawInterval < 1 || rawInterval > 365)) {
     return Response.json({ error: "Interval must be a whole number from 1 to 365 days." }, { status: 400 })
   }
-
-  const intervalDays = rawInterval as number | null
   const plant = await prisma.plant.findUnique({ where: { id } })
   if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
 
@@ -24,6 +22,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ name: updatedPlant.name })
   }
 
+  const intervalDays = rawInterval as number | null
   const wateringGroup = intervalDays === null
     ? await prisma.wateringGroup.upsert({
         where: { key: "unassigned" },
@@ -42,6 +41,29 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   })
 
   return Response.json({ name: hasName ? name : plant.name, group: wateringGroup.name, wateringInterval: wateringGroup.intervalDays })
+}
+
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const body = await request.json().catch(() => null)
+  const weight = typeof body?.weight === "number" ? body.weight : Number(body?.weight)
+
+  if (!Number.isFinite(weight) || weight < 0) {
+    return Response.json({ error: "Weight must be zero or greater." }, { status: 400 })
+  }
+
+  const plant = await prisma.plant.findUnique({ where: { id }, select: { id: true } })
+  if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
+
+  const now = new Date()
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const weightLog = await prisma.weightLog.upsert({
+    where: { plantId_date: { plantId: id, date } },
+    update: { weight },
+    create: { plantId: id, date, weight },
+  })
+
+  return Response.json({ date: weightLog.date.toISOString(), weight: weightLog.weight })
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
