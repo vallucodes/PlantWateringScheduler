@@ -32,6 +32,7 @@ export default async function Home() {
   const plants = await prisma.plant.findMany({
     include: {
       wateringGroup: true,
+      winterWateringGroup: true,
       weightLogs: {
         orderBy: { date: "asc" },
       },
@@ -54,6 +55,9 @@ export default async function Home() {
           name: plant.name,
           group: plant.wateringGroup?.name ?? "Unassigned",
           wateringInterval: plant.wateringGroup?.intervalDays ?? null,
+          winterGroup: plant.winterWateringGroup?.name ?? "Winter Unassigned",
+          winterWateringInterval: plant.winterWateringGroup?.intervalDays ?? null,
+          estimatedWateringInterval: plant.estimatedWateringInterval,
           lastWatered: plant.weightLogs.at(-1)?.date.toISOString() ?? null,
           room: plant.wateringGroup?.intervalDays
             ? `Every ${plant.wateringGroup.intervalDays} days`

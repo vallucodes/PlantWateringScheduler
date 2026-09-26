@@ -71,6 +71,8 @@ export async function POST(request: Request) {
       name: plant.name,
       group: intervalDays === null ? "Unassigned" : String(intervalDays),
       wateringInterval: intervalDays,
+      winterGroup: intervalDays === null ? "Winter Unassigned" : String(intervalDays * 2),
+      winterWateringInterval: intervalDays === null ? null : intervalDays * 2,
       lastWatered: null,
       room: intervalDays ? `Every ${intervalDays} days` : "No schedule",
       minWeight: minWeight ?? 0,

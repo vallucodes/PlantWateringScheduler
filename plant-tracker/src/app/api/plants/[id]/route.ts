@@ -1,65 +1,69 @@
 import { prisma } from "@/lib/prisma"
 
-function winterGroupFor(group: { key: string; name: string; intervalDays: number | null }) {
-  const intervalDays = group.intervalDays === null ? null : group.intervalDays * 2
-  return {
-    key: `winter:${group.key}`,
-    name: intervalDays === null ? `Winter ${group.name}` : String(intervalDays),
-    intervalDays,
-  }
-}
-
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await request.json().catch(() => null)
   const hasName = Object.prototype.hasOwnProperty.call(body ?? {}, "name")
   const hasInterval = Object.prototype.hasOwnProperty.call(body ?? {}, "intervalDays")
+  const hasEstimatedInterval = Object.prototype.hasOwnProperty.call(body ?? {}, "estimatedWateringInterval")
+  const season = body?.season ?? "summer"
   const name = typeof body?.name === "string" ? body.name.trim() : ""
   const rawInterval = body?.intervalDays
+  const rawEstimatedInterval = body?.estimatedWateringInterval
 
-  if (!hasName && !hasInterval) return Response.json({ error: "No plant changes were provided." }, { status: 400 })
+  if (!hasName && !hasInterval && !hasEstimatedInterval) return Response.json({ error: "No plant changes were provided." }, { status: 400 })
   if (hasName && !name) return Response.json({ error: "Plant name is required." }, { status: 400 })
+  if (season !== "summer" && season !== "winter") return Response.json({ error: "Season must be summer or winter." }, { status: 400 })
 
   if (hasInterval && rawInterval !== null && (!Number.isInteger(rawInterval) || rawInterval < 1 || rawInterval > 365)) {
     return Response.json({ error: "Interval must be a whole number from 1 to 365 days." }, { status: 400 })
   }
-  const plant = await prisma.plant.findUnique({ where: { id } })
+  if (hasEstimatedInterval && rawEstimatedInterval !== null && (!Number.isInteger(rawEstimatedInterval) || rawEstimatedInterval < 1 || rawEstimatedInterval > 365)) {
+    return Response.json({ error: "Estimated interval must be a whole number from 1 to 365 days." }, { status: 400 })
+  }
+  const plant = await prisma.plant.findUnique({ where: { id }, include: { wateringGroup: true } })
   if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
 
   if (!hasInterval) {
-    const updatedPlant = await prisma.plant.update({ where: { id }, data: { name } })
-    return Response.json({ name: updatedPlant.name })
+    if (hasEstimatedInterval && plant.wateringGroup?.key !== "unassigned") {
+      return Response.json({ error: "Estimated intervals are only available for Unassigned plants." }, { status: 400 })
+    }
+    const updatedPlant = await prisma.plant.update({
+      where: { id },
+      data: {
+        ...(hasName ? { name } : {}),
+        ...(hasEstimatedInterval ? { estimatedWateringInterval: rawEstimatedInterval as number | null } : {}),
+      },
+    })
+    return Response.json({ name: updatedPlant.name, estimatedWateringInterval: updatedPlant.estimatedWateringInterval })
   }
 
   const intervalDays = rawInterval as number | null
-  const wateringGroup = intervalDays === null
-    ? await prisma.wateringGroup.upsert({
-        where: { key: "unassigned" },
-        update: { name: "Unassigned", intervalDays: null },
-        create: { key: "unassigned", name: "Unassigned", intervalDays: null },
-      })
-    : await prisma.wateringGroup.upsert({
-        where: { key: String(intervalDays) },
-        update: { name: String(intervalDays), intervalDays },
-        create: { key: String(intervalDays), name: String(intervalDays), intervalDays },
-      })
-  const winterGroup = winterGroupFor({
-    key: wateringGroup.key,
-    name: wateringGroup.name,
-    intervalDays: wateringGroup.intervalDays,
-  })
-  const winterWateringGroup = await prisma.wateringGroup.upsert({
-    where: { key: winterGroup.key },
-    update: { name: winterGroup.name, intervalDays: winterGroup.intervalDays },
-    create: winterGroup,
+  const groupKey = season === "winter"
+    ? `winter:${intervalDays === null ? "unassigned" : intervalDays}`
+    : intervalDays === null ? "unassigned" : String(intervalDays)
+  const groupName = intervalDays === null
+    ? season === "winter" ? "Winter Unassigned" : "Unassigned"
+    : String(intervalDays)
+  const existingWinterGroup = season === "winter"
+    ? await prisma.wateringGroup.findFirst({ where: { key: { startsWith: "winter:" }, intervalDays } })
+    : null
+  const wateringGroup = existingWinterGroup ?? await prisma.wateringGroup.upsert({
+    where: { key: groupKey },
+    update: { name: groupName, intervalDays },
+    create: { key: groupKey, name: groupName, intervalDays },
   })
 
   await prisma.plant.update({
     where: { id },
-    data: { ...(hasName ? { name } : {}), wateringGroupId: wateringGroup.id, winterWateringGroupId: winterWateringGroup.id },
+    data: {
+      ...(hasName ? { name } : {}),
+      ...(season === "winter" ? { winterWateringGroupId: wateringGroup.id } : { wateringGroupId: wateringGroup.id }),
+      ...(season === "summer" && wateringGroup.key !== "unassigned" ? { estimatedWateringInterval: null } : {}),
+    },
   })
 
-  return Response.json({ name: hasName ? name : plant.name, group: wateringGroup.name, wateringInterval: wateringGroup.intervalDays })
+  return Response.json({ name: hasName ? name : plant.name, season, group: wateringGroup.name, wateringInterval: wateringGroup.intervalDays })
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
