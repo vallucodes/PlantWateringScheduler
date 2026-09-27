@@ -6,6 +6,8 @@ import {
   ArrowUpRight,
   CalendarDays,
   ChevronDown,
+  ChevronsDownUp,
+  ChevronsUpDown,
   Droplets,
   Leaf,
   LogIn,
@@ -149,7 +151,7 @@ function NextWateringColumn({ children }: { children: React.ReactNode }) {
   )
 }
 
-function WateringSchedule({ plants, query, onPlantUpdated, onEstimatedUpdated, onWeightAdded, onWeightRemoved }: { plants: Plant[]; query: string; onPlantUpdated: (plantId: string, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: string, interval: number | null) => void; onWeightAdded: (plantId: string, date: string, weight: number) => void; onWeightRemoved: (plantId: string, date: string) => void }) {
+function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEstimatedUpdated, onWeightAdded, onWeightRemoved }: { plants: Plant[]; query: string; onQueryChange: (query: string) => void; onPlantUpdated: (plantId: string, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: string, interval: number | null) => void; onWeightAdded: (plantId: string, date: string, weight: number) => void; onWeightRemoved: (plantId: string, date: string) => void }) {
   const [lastWateredDates, setLastWateredDates] = useState<Record<string, Date | null>>(
     () => Object.fromEntries(scheduleGroups.map((group) => [group.name, group.lastWatered ? parseScheduleDate(group.lastWatered) : null])),
   )
@@ -198,6 +200,26 @@ function WateringSchedule({ plants, query, onPlantUpdated, onEstimatedUpdated, o
 
   return (
     <div className="mt-9 overflow-hidden border-y border-[#d8dfd5]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e0e6dd] px-1 py-2">
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedGroups(Object.fromEntries(groups.map((group) => [group.name, true])))} className="h-8 gap-1.5 px-2 text-xs text-[#55705a] hover:bg-[#eef3eb]">
+            <ChevronsDownUp className="size-3.5" />
+            Expand all
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedGroups(Object.fromEntries(groups.map((group) => [group.name, false])))} className="h-8 gap-1.5 px-2 text-xs text-[#55705a] hover:bg-[#eef3eb]">
+            <ChevronsUpDown className="size-3.5" />
+            Collapse all
+          </Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#9aa39b]" />
+            <Input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search plants" className="h-9 w-full border-[#d8dfd5] bg-[#f7f9f5] pl-9 text-sm md:w-44" />
+            {query && <button type="button" aria-label="Clear search" onClick={() => onQueryChange("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9aa39b]"><X className="size-3.5" /></button>}
+          </div>
+          <Button type="button" variant="outline" size="icon" aria-label="Add plant" className="h-9 w-9 border-[#d8dfd5] text-[#315d42]"><Plus className="size-4" /></Button>
+        </div>
+      </div>
       <div className="grid grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] items-center gap-4 border-b border-[#e0e6dd] px-1 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9aa39b] sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)]">
         <span>Watering group</span>
         <span>Last watered</span>
@@ -224,24 +246,22 @@ function WateringSchedule({ plants, query, onPlantUpdated, onEstimatedUpdated, o
           <div>
             <p style={{ color: groupColor.accent }} className="flex items-center gap-2 font-bold"><ChevronDown className={`size-4 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />{row.group}</p>
           </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             {row.group !== "Unassigned" ? <>
-            <div className="flex min-w-0 items-center gap-1.5">
-              {row.lastWatered ? (
-                <span className="relative inline-flex size-5 items-center justify-center text-[#55705a]" title={`Set last watered date for ${row.group}`}>
-                  <CalendarDays className="size-4" aria-hidden="true" />
-                  <input
-                    type="date"
-                    value={dateInputValue(lastWateredDates[row.group])}
-                    onChange={(event) => updateLastWatered(row.group, parseInputDate(event.target.value))}
-                    onClick={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => event.stopPropagation()}
-                    aria-label={`Set last watered date for ${row.group}`}
-                    className="absolute inset-0 cursor-pointer opacity-0"
-                  />
-                </span>
-              ) : null}
-              <span className="font-bold text-white">{row.lastWatered ? formatScheduleDate(lastWateredDates[row.group] as Date) : "Not recorded"}</span>
+            <div className="flex w-[5.25rem] shrink-0 items-center gap-1.5">
+              <span className="relative inline-flex size-5 shrink-0 items-center justify-center text-[#55705a]" title={`Set last watered date for ${row.group}`}>
+                <CalendarDays className="size-4" aria-hidden="true" />
+                <input
+                  type="date"
+                  value={dateInputValue(lastWateredDates[row.group])}
+                  onChange={(event) => updateLastWatered(row.group, parseInputDate(event.target.value))}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  aria-label={`Set last watered date for ${row.group}`}
+                  className="absolute inset-0 cursor-pointer opacity-0"
+                />
+              </span>
+              <span className="font-bold tabular-nums text-white">{row.lastWatered ? formatScheduleDate(lastWateredDates[row.group] as Date) : "Not recorded"}</span>
             </div>
             <Button
               type="button"
@@ -249,7 +269,7 @@ function WateringSchedule({ plants, query, onPlantUpdated, onEstimatedUpdated, o
               size="sm"
               onClick={(event) => { event.stopPropagation(); updateLastWatered(row.group, new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()))) }}
               onKeyDown={(event) => event.stopPropagation()}
-              className="h-7 border-[#cbdac8] px-2 text-xs text-[#315d42] hover:bg-[#eef3eb]"
+              className="h-7 shrink-0 border-[#cbdac8] px-2 text-xs text-[#315d42] hover:bg-[#eef3eb]"
             >
               Water now
             </Button>
@@ -692,13 +712,15 @@ function PlantCard({ plant, lastWateredDate, onLastWateredUpdated, onUpdated, on
           <div className="flex min-w-0 items-center gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#dfe9d7] text-[#315d42]"><Sprout className="size-4" /></div><div className="min-w-0"><p className="truncate font-semibold text-[#1f3428]">{plant.name}</p></div></div>
           {plant.group === "Unassigned" ? <>
             <div className="min-w-0 text-sm">
-            <div className="flex items-center gap-1.5">
-              {lastWateredDate ? <span className="relative inline-flex size-5 items-center justify-center text-[#55705a]" title={`Set last watered date for ${plant.name}`}>
-                <CalendarDays className="size-4" aria-hidden="true" />
-                <input type="date" value={dateInputValue(lastWateredDate)} onChange={(event) => onLastWateredUpdated?.(parseInputDate(event.target.value))} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} aria-label={`Set last watered date for ${plant.name}`} className="absolute inset-0 cursor-pointer opacity-0" />
-              </span> : null}
-              <span className="font-bold text-white">{lastWateredDate ? formatScheduleDate(lastWateredDate) : "Not recorded"}</span>
-              <Button type="button" variant="outline" size="sm" onClick={(event) => { event.stopPropagation(); onLastWateredUpdated?.(new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()))) }} onKeyDown={(event) => event.stopPropagation()} className="h-7 border-[#cbdac8] px-2 text-xs text-[#315d42] hover:bg-[#eef3eb]">Water now</Button>
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="flex w-[5.25rem] shrink-0 items-center gap-1.5">
+                <span className="relative inline-flex size-5 shrink-0 items-center justify-center text-[#55705a]" title={`Set last watered date for ${plant.name}`}>
+                  <CalendarDays className="size-4" aria-hidden="true" />
+                  <input type="date" value={dateInputValue(lastWateredDate)} onChange={(event) => onLastWateredUpdated?.(parseInputDate(event.target.value))} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} aria-label={`Set last watered date for ${plant.name}`} className="absolute inset-0 cursor-pointer opacity-0" />
+                </span>
+                <span className="font-bold tabular-nums text-white">{lastWateredDate ? formatScheduleDate(lastWateredDate) : "Not recorded"}</span>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={(event) => { event.stopPropagation(); onLastWateredUpdated?.(new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()))) }} onKeyDown={(event) => event.stopPropagation()} className="h-7 shrink-0 border-[#cbdac8] px-2 text-xs text-[#315d42] hover:bg-[#eef3eb]">Water now</Button>
             </div>
             </div>
             <div className="min-w-0 text-sm font-medium text-[#1f3428]">{nextWatering ? <><span>{formatScheduleDate(nextWatering)}</span> <strong className="font-bold text-[#315d42]">({daysFromToday(nextWatering) > 0 ? "+" : ""}{daysFromToday(nextWatering)} days)</strong></> : "Set an interval"}</div>
@@ -829,7 +851,7 @@ export default function PlantDashboard({ plants, lastUpdated }: { plants: Plant[
       <div className="mx-auto flex min-h-screen max-w-[1200px] flex-col bg-[#21242c] shadow-[0_0_80px_rgba(0,0,0,0.24)]">
         <header className="flex items-center justify-between border-b border-[#e0e6dd] px-5 py-4 sm:px-10 lg:px-14"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-[#315d42] text-[#e8f2e0]"><Droplets className="size-4" /></div><span className="font-heading text-lg font-semibold tracking-tight">verdant</span></div><div className="flex items-center gap-2"><span className="hidden text-xs text-[#78847a] sm:inline">Last measurement {lastUpdated}</span><Button variant="ghost" size="icon" aria-label="Sign in" className="text-[#55705a] hover:bg-[#eef3eb]"><LogIn className="size-4" /></Button></div></header>
         <section className="border-b border-[#e0e6dd] px-5 pb-10 pt-10 sm:px-10 lg:px-14 lg:pb-12 lg:pt-14"><div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="max-w-xl font-heading text-4xl font-semibold tracking-[-0.04em] text-[#1f3428] sm:text-5xl">A little care goes a long way.</h1><p className="mt-4 max-w-lg text-sm leading-6 text-[#78847a]">Keep an eye on the quiet signals. Your plants are telling you when it is time for a drink.</p></div><div className="flex shrink-0 gap-8 border-l border-[#d8dfd5] pl-6"><div><p className="text-3xl font-semibold tracking-tight text-[#315d42]">{plantList.length}</p><p className="mt-1 text-xs text-[#78847a]">plants tracked</p></div><div><p className="flex items-center gap-1 text-3xl font-semibold tracking-tight text-[#bd5b45]">{needsAttention}<ArrowDownRight className="size-5" /></p><p className="mt-1 text-xs text-[#78847a]">need attention</p></div></div></div></section>
-        <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7 flex flex-col justify-between gap-4 md:flex-row md:items-center"><div><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a group to see its plants.</p></div><div className="flex items-center gap-2"><div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#9aa39b]" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plants" className="h-9 w-full border-[#d8dfd5] bg-[#f7f9f5] pl-9 text-sm md:w-44" />{query && <button aria-label="Clear search" onClick={() => setQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9aa39b]"><X className="size-3.5" /></button>}</div><Button variant="outline" size="icon" aria-label="Add plant" className="h-9 w-9 border-[#d8dfd5] text-[#315d42]"><Plus className="size-4" /></Button></div></div><WateringSchedule plants={plantList} query={query} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
+        <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7"><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a group to see its plants.</p></div><WateringSchedule plants={plantList} query={query} onQueryChange={setQuery} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
           if (plant.id !== plantId) return plant
           if (season === "winter") return { ...plant, winterGroup: nextGroup, winterWateringInterval: wateringInterval }
           return { ...plant, group: nextGroup, wateringInterval, room: wateringInterval ? `Every ${wateringInterval} days` : "No schedule" }
