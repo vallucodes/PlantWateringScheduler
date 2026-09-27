@@ -78,10 +78,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   return Response.json({ date: weightLog.date.toISOString(), weight: weightLog.weight })
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const plant = await prisma.plant.findUnique({ where: { id }, select: { id: true } })
   if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
+
+  if (new URL(request.url).searchParams.get("weight") === "latest") {
+    const latestWeight = await prisma.weightLog.findFirst({ where: { plantId: id }, orderBy: { date: "desc" } })
+    if (!latestWeight) return Response.json({ error: "No weight history to remove." }, { status: 404 })
+
+    await prisma.weightLog.delete({ where: { id: latestWeight.id } })
+    return Response.json({ date: latestWeight.date.toISOString() })
+  }
 
   await prisma.plant.delete({ where: { id } })
   return new Response(null, { status: 204 })

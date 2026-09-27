@@ -135,7 +135,7 @@ function formatDaysAgo(dateLabel: string | undefined) {
   return `${daysAgo}d ago`
 }
 
-function WateringSchedule({ plants, query, onPlantUpdated, onEstimatedUpdated, onWeightAdded }: { plants: Plant[]; query: string; onPlantUpdated: (plantId: string, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: string, interval: number | null) => void; onWeightAdded: (plantId: string, date: string, weight: number) => void }) {
+function WateringSchedule({ plants, query, onPlantUpdated, onEstimatedUpdated, onWeightAdded, onWeightRemoved }: { plants: Plant[]; query: string; onPlantUpdated: (plantId: string, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: string, interval: number | null) => void; onWeightAdded: (plantId: string, date: string, weight: number) => void; onWeightRemoved: (plantId: string, date: string) => void }) {
   const [lastWateredDates, setLastWateredDates] = useState<Record<string, Date | null>>(
     () => Object.fromEntries(scheduleGroups.map((group) => [group.name, group.lastWatered ? parseScheduleDate(group.lastWatered) : null])),
   )
@@ -254,7 +254,7 @@ function WateringSchedule({ plants, query, onPlantUpdated, onEstimatedUpdated, o
             <span className="font-medium text-[#1f3428]">Not recorded</span>
           )}
           </div>
-          {isExpanded && row.plants.length > 0 ? <div>{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} lastWateredDate={plant.group === "Unassigned" ? plantLastWateredDates[plant.id] ?? null : null} onLastWateredUpdated={plant.group === "Unassigned" ? (date) => updatePlantLastWatered(plant.id, date) : undefined} onUpdated={(season, nextGroup, wateringInterval) => onPlantUpdated(plant.id, season, nextGroup, wateringInterval)} onEstimateUpdated={(interval) => onEstimatedUpdated(plant.id, interval)} onWeightAdded={(date, weight) => onWeightAdded(plant.id, date, weight)} />)}</div> : null}
+          {isExpanded && row.plants.length > 0 ? <div>{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} lastWateredDate={plant.group === "Unassigned" ? plantLastWateredDates[plant.id] ?? null : null} onLastWateredUpdated={plant.group === "Unassigned" ? (date) => updatePlantLastWatered(plant.id, date) : undefined} onUpdated={(season, nextGroup, wateringInterval) => onPlantUpdated(plant.id, season, nextGroup, wateringInterval)} onEstimateUpdated={(interval) => onEstimatedUpdated(plant.id, interval)} onWeightAdded={(date, weight) => onWeightAdded(plant.id, date, weight)} onWeightRemoved={(date) => onWeightRemoved(plant.id, date)} />)}</div> : null}
         </div>
       })}
       <div className="flex items-center justify-between gap-3 border-t border-[#d8dfd5] px-1 py-3">
@@ -593,11 +593,12 @@ function PlantScheduleEditor({ plant, onUpdated, onEstimateUpdated }: { plant: P
   )
 }
 
-function PlantCard({ plant, lastWateredDate, onLastWateredUpdated, onUpdated, onEstimateUpdated, onWeightAdded, onDeleted, onNameUpdated }: { plant: Plant; lastWateredDate: Date | null; onLastWateredUpdated?: (date: Date | null) => void; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightAdded: (date: string, weight: number) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
+function PlantCard({ plant, lastWateredDate, onLastWateredUpdated, onUpdated, onEstimateUpdated, onWeightAdded, onWeightRemoved, onDeleted, onNameUpdated }: { plant: Plant; lastWateredDate: Date | null; onLastWateredUpdated?: (date: Date | null) => void; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightAdded: (date: string, weight: number) => void; onWeightRemoved: (date: string) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
   const { current, percentage } = getMoisture(plant)
   const groupColor = colorForGroup(plant.group)
   const [weight, setWeight] = useState("")
   const [isSavingWeight, setIsSavingWeight] = useState(false)
+  const [isRemovingWeight, setIsRemovingWeight] = useState(false)
   const [weightError, setWeightError] = useState<string | null>(null)
   const nextWatering = plant.group === "Unassigned" && lastWateredDate && plant.estimatedWateringInterval !== null
     ? addDays(lastWateredDate, plant.estimatedWateringInterval)
@@ -629,6 +630,21 @@ function PlantCard({ plant, lastWateredDate, onLastWateredUpdated, onUpdated, on
       setIsSavingWeight(false)
     }
   }
+  const removeLatestWeight = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    setIsRemovingWeight(true)
+    setWeightError(null)
+    try {
+      const response = await fetch(`/api/plants/${plant.id}?weight=latest`, { method: "DELETE" })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error ?? "Could not remove weight.")
+      onWeightRemoved(result.date)
+    } catch (removeError) {
+      setWeightError(removeError instanceof Error ? removeError.message : "Could not remove weight.")
+    } finally {
+      setIsRemovingWeight(false)
+    }
+  }
 
   return (
     <Dialog>
@@ -647,19 +663,25 @@ function PlantCard({ plant, lastWateredDate, onLastWateredUpdated, onUpdated, on
             </div>
             </div>
             <div className="min-w-0 text-sm font-medium text-[#1f3428]">{nextWatering ? <><span>{formatScheduleDate(nextWatering)}</span> <strong className="font-bold text-[#315d42]">({daysFromToday(nextWatering) > 0 ? "+" : ""}{daysFromToday(nextWatering)} days)</strong></> : "Set an interval"}</div>
-            <div className="grid grid-cols-[5rem_8rem_1rem] items-center gap-3 sm:absolute sm:right-4 sm:top-1/2 sm:-translate-y-1/2">
+            <div className="grid grid-cols-[5rem_auto_1rem] items-center gap-3 sm:absolute sm:right-1 sm:top-1/2 sm:-translate-y-1/2">
               <form onSubmit={saveWeight} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} className="flex w-full min-w-0 items-center gap-1"><Input type="text" inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} placeholder="g" aria-label={`Enter current weight for ${plant.name}`} className="h-8 w-full border-white/50 bg-black/20 px-2 text-sm text-white placeholder:text-white/70" disabled={isSavingWeight} /><button type="submit" className="sr-only">Save weight</button>{weightError ? <span className="text-xs text-white" role="alert">{weightError}</span> : null}</form>
-              <div className="w-full text-left tabular-nums"><p className="whitespace-nowrap font-heading text-xl font-bold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-sm font-bold text-white">g</span></p><p className="whitespace-nowrap text-xs font-bold tracking-[0.08em] text-white">{formatDaysAgo(plant.history.at(-1)?.date)}</p></div>
+              <div className="flex items-center gap-0.5">
+                <div className="w-[6.5rem] text-left tabular-nums"><p className="whitespace-nowrap font-heading text-xl font-bold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-sm font-bold text-white">g</span></p><p className="whitespace-nowrap text-xs font-bold tracking-[0.08em] text-white">{formatDaysAgo(plant.history.at(-1)?.date)}</p></div>
+                {plant.history.some((entry) => entry.weight !== null) ? <button type="button" aria-label={`Remove latest weight for ${plant.name}`} title="Remove latest weight" onClick={removeLatestWeight} onKeyDown={(event) => event.stopPropagation()} disabled={isRemovingWeight} className="flex size-6 items-center justify-center rounded-md text-[#aab4aa] transition-colors hover:bg-black/10 hover:text-[#bd5b45] disabled:opacity-50"><Trash2 className="size-3.5" /></button> : <span className="size-6" />}
+              </div>
               <ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" />
             </div>
-          </> : <div className="col-span-2 grid min-w-0 grid-cols-[22rem_minmax(0,1fr)_5rem_8rem_1rem] items-center gap-3">
+          </> : <div className="col-span-2 grid min-w-0 grid-cols-[22rem_minmax(0,1fr)_5rem_auto_1rem] items-center gap-3">
             <div className="w-full" role="progressbar" aria-label={`${plant.name} moisture level`} aria-valuemin={plant.minWeight} aria-valuemax={plant.maxWeight} aria-valuenow={current} aria-valuetext={`${percentage}% from dry weight`}>
               <div className="mb-1 flex justify-between text-xs font-semibold leading-none text-white/80"><span>{plant.minWeight.toLocaleString()}g</span><span>{percentage}%</span><span>{plant.maxWeight.toLocaleString()}g</span></div>
               <div className="h-2.5 overflow-hidden rounded-full bg-black/20"><div className="h-full rounded-full bg-[#dfe9d7] transition-[width]" style={{ width: `${percentage}%` }} /></div>
             </div>
             <div className="min-h-px min-w-0" />
             <form onSubmit={saveWeight} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} className="flex w-full min-w-0 items-center gap-1"><Input type="text" inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} placeholder="g" aria-label={`Enter current weight for ${plant.name}`} className="h-8 w-full border-white/50 bg-black/20 px-2 text-sm text-white placeholder:text-white/70" disabled={isSavingWeight} /><button type="submit" className="sr-only">Save weight</button>{weightError ? <span className="text-xs text-white" role="alert">{weightError}</span> : null}</form>
-            <div className="w-full text-left tabular-nums"><p className="whitespace-nowrap font-heading text-xl font-bold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-sm font-bold text-white">g</span></p><p className="whitespace-nowrap text-xs font-bold tracking-[0.08em] text-white">{formatDaysAgo(plant.history.at(-1)?.date)}</p></div>
+            <div className="flex items-center gap-0.5">
+              <div className="w-[6.5rem] text-left tabular-nums"><p className="whitespace-nowrap font-heading text-xl font-bold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-sm font-bold text-white">g</span></p><p className="whitespace-nowrap text-xs font-bold tracking-[0.08em] text-white">{formatDaysAgo(plant.history.at(-1)?.date)}</p></div>
+              {plant.history.some((entry) => entry.weight !== null) ? <button type="button" aria-label={`Remove latest weight for ${plant.name}`} title="Remove latest weight" onClick={removeLatestWeight} onKeyDown={(event) => event.stopPropagation()} disabled={isRemovingWeight} className="flex size-6 items-center justify-center rounded-md text-[#aab4aa] transition-colors hover:bg-black/10 hover:text-[#bd5b45] disabled:opacity-50"><Trash2 className="size-3.5" /></button> : <span className="size-6" />}
+            </div>
             <ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" />
           </div>}
         </div>
@@ -757,6 +779,11 @@ export default function PlantDashboard({ plants, lastUpdated }: { plants: Plant[
     }))
   }
 
+  const removeWeight = (plantId: string, date: string) => {
+    const dateLabel = new Date(date).toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" })
+    setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, history: plant.history.filter((entry) => entry.date !== dateLabel) } : plant))
+  }
+
   return (
     <main className="report-shell min-h-screen bg-[#0f1013] text-[#e7e9ed]">
       <CreatePlantDialog onCreated={(plant) => setPlantList((current) => [plant, ...current])} />
@@ -767,7 +794,7 @@ export default function PlantDashboard({ plants, lastUpdated }: { plants: Plant[
           if (plant.id !== plantId) return plant
           if (season === "winter") return { ...plant, winterGroup: nextGroup, winterWateringInterval: wateringInterval }
           return { ...plant, group: nextGroup, wateringInterval, room: wateringInterval ? `Every ${wateringInterval} days` : "No schedule" }
-        }))} onEstimatedUpdated={(plantId, interval) => setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, estimatedWateringInterval: interval } : plant))} onWeightAdded={addWeight} /></section>
+        }))} onEstimatedUpdated={(plantId, interval) => setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, estimatedWateringInterval: interval } : plant))} onWeightAdded={addWeight} onWeightRemoved={removeWeight} /></section>
         <footer className="flex flex-col justify-between gap-3 border-t border-[#e0e6dd] px-5 py-5 text-xs text-[#8b968d] sm:flex-row sm:px-10 lg:px-14"><p className="flex items-center gap-2"><CalendarDays className="size-3.5" /> Weight history is your most reliable watering signal.</p><p className="flex items-center gap-1 text-[#6f896f]"><ArrowUpRight className="size-3.5" /> All systems growing</p></footer>
       </div>
     </main>
