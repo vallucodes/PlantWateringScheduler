@@ -233,7 +233,7 @@ function WateringSchedule({ plants, query, onPlantUpdated, onEstimatedUpdated, o
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => updateLastWatered(row.group, new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())))}
+              onClick={(event) => { event.stopPropagation(); updateLastWatered(row.group, new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()))) }}
               onKeyDown={(event) => event.stopPropagation()}
               className="h-7 border-[#cbdac8] px-2 text-xs text-[#315d42] hover:bg-[#eef3eb]"
             >
@@ -643,7 +643,7 @@ function PlantCard({ plant, lastWateredDate, onLastWateredUpdated, onUpdated, on
                 <input type="date" value={dateInputValue(lastWateredDate)} onChange={(event) => onLastWateredUpdated?.(parseInputDate(event.target.value))} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} aria-label={`Set last watered date for ${plant.name}`} className="absolute inset-0 cursor-pointer opacity-0" />
               </span> : null}
               <span className="font-bold text-white">{lastWateredDate ? formatScheduleDate(lastWateredDate) : "Not recorded"}</span>
-              <Button type="button" variant="outline" size="sm" onClick={() => onLastWateredUpdated?.(new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())))} onKeyDown={(event) => event.stopPropagation()} className="h-7 border-[#cbdac8] px-2 text-xs text-[#315d42] hover:bg-[#eef3eb]">Water now</Button>
+              <Button type="button" variant="outline" size="sm" onClick={(event) => { event.stopPropagation(); onLastWateredUpdated?.(new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()))) }} onKeyDown={(event) => event.stopPropagation()} className="h-7 border-[#cbdac8] px-2 text-xs text-[#315d42] hover:bg-[#eef3eb]">Water now</Button>
             </div>
             </div>
             <div className="min-w-0 text-sm font-medium text-[#1f3428]">{nextWatering ? <><span>{formatScheduleDate(nextWatering)}</span> <strong className="font-bold text-[#315d42]">({daysFromToday(nextWatering) > 0 ? "+" : ""}{daysFromToday(nextWatering)} days)</strong></> : "Set an interval"}</div>
