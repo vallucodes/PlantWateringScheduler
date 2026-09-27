@@ -5,65 +5,54 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const body = await request.json().catch(() => null)
   const hasName = Object.prototype.hasOwnProperty.call(body ?? {}, "name")
   const hasInterval = Object.prototype.hasOwnProperty.call(body ?? {}, "intervalDays")
-  const hasEstimatedInterval = Object.prototype.hasOwnProperty.call(body ?? {}, "estimatedWateringInterval")
-  const season = body?.season ?? "summer"
+  const hasWinterInterval = Object.prototype.hasOwnProperty.call(body ?? {}, "winterIntervalDays")
   const name = typeof body?.name === "string" ? body.name.trim() : ""
   const rawInterval = body?.intervalDays
-  const rawEstimatedInterval = body?.estimatedWateringInterval
+  const rawWinterInterval = body?.winterIntervalDays
 
-  if (!hasName && !hasInterval && !hasEstimatedInterval) return Response.json({ error: "No plant changes were provided." }, { status: 400 })
+  if (!hasName && !hasInterval && !hasWinterInterval) return Response.json({ error: "No plant changes were provided." }, { status: 400 })
   if (hasName && !name) return Response.json({ error: "Plant name is required." }, { status: 400 })
-  if (season !== "summer" && season !== "winter") return Response.json({ error: "Season must be summer or winter." }, { status: 400 })
 
   if (hasInterval && rawInterval !== null && (!Number.isInteger(rawInterval) || rawInterval < 1 || rawInterval > 365)) {
     return Response.json({ error: "Interval must be a whole number from 1 to 365 days." }, { status: 400 })
   }
-  if (hasEstimatedInterval && rawEstimatedInterval !== null && (!Number.isInteger(rawEstimatedInterval) || rawEstimatedInterval < 1 || rawEstimatedInterval > 365)) {
-    return Response.json({ error: "Estimated interval must be a whole number from 1 to 365 days." }, { status: 400 })
+  if (hasWinterInterval && rawWinterInterval !== null && (!Number.isInteger(rawWinterInterval) || rawWinterInterval < 1 || rawWinterInterval > 365)) {
+    return Response.json({ error: "Winter interval must be a whole number from 1 to 365 days." }, { status: 400 })
   }
-  const plant = await prisma.plant.findUnique({ where: { id }, include: { wateringGroup: true } })
+
+  const plant = await prisma.plant.findUnique({ where: { id } })
   if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
 
-  if (!hasInterval) {
-    if (hasEstimatedInterval && plant.wateringGroup?.key !== "unassigned") {
-      return Response.json({ error: "Estimated intervals are only available for Unassigned plants." }, { status: 400 })
-    }
-    const updatedPlant = await prisma.plant.update({
-      where: { id },
-      data: {
-        ...(hasName ? { name } : {}),
-        ...(hasEstimatedInterval ? { estimatedWateringInterval: rawEstimatedInterval as number | null } : {}),
-      },
-    })
-    return Response.json({ name: updatedPlant.name, estimatedWateringInterval: updatedPlant.estimatedWateringInterval })
+  if (!hasInterval && !hasWinterInterval) {
+    const updatedPlant = await prisma.plant.update({ where: { id }, data: { name } })
+    return Response.json({ name: updatedPlant.name })
   }
 
-  const intervalDays = rawInterval as number | null
-  const groupKey = season === "winter"
-    ? `winter:${intervalDays === null ? "unassigned" : intervalDays}`
-    : intervalDays === null ? "unassigned" : String(intervalDays)
-  const groupName = intervalDays === null
-    ? season === "winter" ? "Winter Unassigned" : "Unassigned"
-    : String(intervalDays)
-  const existingWinterGroup = season === "winter"
-    ? await prisma.wateringGroup.findFirst({ where: { key: { startsWith: "winter:" }, intervalDays } })
-    : null
-  const wateringGroup = existingWinterGroup ?? await prisma.wateringGroup.upsert({
-    where: { key: groupKey },
-    update: { name: groupName, intervalDays },
-    create: { key: groupKey, name: groupName, intervalDays },
+  const [currentGroup, currentWinterGroup] = await Promise.all([
+    plant.wateringGroupId ? prisma.wateringGroup.findUnique({ where: { id: plant.wateringGroupId } }) : null,
+    plant.winterWateringGroupId ? prisma.wateringGroup.findUnique({ where: { id: plant.winterWateringGroupId } }) : null,
+  ])
+  const intervalDays = hasInterval ? rawInterval as number | null : currentGroup?.intervalDays ?? null
+  const winterIntervalDays = hasWinterInterval
+    ? rawWinterInterval as number | null
+    : currentWinterGroup?.intervalDays ?? (intervalDays === null ? null : intervalDays * 2)
+  const wateringGroup = await prisma.wateringGroup.upsert({
+    where: { key: intervalDays === null ? "unassigned" : String(intervalDays) },
+    update: { name: intervalDays === null ? "Unassigned" : String(intervalDays), intervalDays },
+    create: { key: intervalDays === null ? "unassigned" : String(intervalDays), name: intervalDays === null ? "Unassigned" : String(intervalDays), intervalDays },
+  })
+  const winterWateringGroup = await prisma.wateringGroup.upsert({
+    where: { key: winterIntervalDays === null ? "winter:unassigned" : `winter:${winterIntervalDays}` },
+    update: { name: winterIntervalDays === null ? "Winter Unassigned" : String(winterIntervalDays), intervalDays: winterIntervalDays },
+    create: { key: winterIntervalDays === null ? "winter:unassigned" : `winter:${winterIntervalDays}`, name: winterIntervalDays === null ? "Winter Unassigned" : String(winterIntervalDays), intervalDays: winterIntervalDays },
   })
 
   await prisma.plant.update({
     where: { id },
-    data: {
-      ...(hasName ? { name } : {}),
-      ...(season === "winter" ? { winterWateringGroupId: wateringGroup.id } : { wateringGroupId: wateringGroup.id }),
-      ...(season === "summer" && wateringGroup.key !== "unassigned" ? { estimatedWateringInterval: null } : {}),
-    },
+    data: { ...(hasName ? { name } : {}), wateringGroupId: wateringGroup.id, winterWateringGroupId: winterWateringGroup.id },
   })
 
-  return Response.json({ name: hasName ? name : plant.name, season, group: wateringGroup.name, wateringInterval: wateringGroup.intervalDays })
+  return Response.json({ name: hasName ? name : plant.name, group: wateringGroup.name, wateringInterval: wateringGroup.intervalDays, winterWateringInterval: winterWateringGroup.intervalDays })
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {

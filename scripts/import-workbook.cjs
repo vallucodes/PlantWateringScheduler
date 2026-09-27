@@ -30,8 +30,7 @@ function parseDate(value, cellAddress) {
 }
 
 function parseGroup(value) {
-  const sourceLabel = textOrNull(value) || "unassigned";
-  const label = sourceLabel === "20 - 31" ? "30" : sourceLabel;
+  const label = textOrNull(value) || "unassigned";
   const intervalMatch = label.match(/^\d+$/);
   return {
     key: label,

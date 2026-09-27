@@ -123,14 +123,23 @@ function daysFromToday(date: Date) {
   return Math.round((date.getTime() - todayUtc) / (24 * 60 * 60 * 1000))
 }
 
-function estimatedNextWatering(plant: Plant) {
-  if (plant.group !== "Unassigned" || plant.estimatedWateringInterval === null || plant.lastWatered === null) return null
-  return addDays(new Date(plant.lastWatered), plant.estimatedWateringInterval)
+function formatDaysAgo(dateLabel: string | undefined) {
+  if (!dateLabel) return "not measured"
+
+  const measuredDate = new Date(`${dateLabel}, ${new Date().getUTCFullYear()}`)
+  if (Number.isNaN(measuredDate.getTime())) return "not measured"
+
+  const daysAgo = Math.max(0, -daysFromToday(measuredDate))
+  if (daysAgo === 0) return "today"
+  return `${daysAgo} day${daysAgo === 1 ? "" : "s"} ago`
 }
 
 function WateringSchedule({ plants, query, onPlantUpdated, onEstimatedUpdated, onWeightAdded }: { plants: Plant[]; query: string; onPlantUpdated: (plantId: string, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: string, interval: number | null) => void; onWeightAdded: (plantId: string, date: string, weight: number) => void }) {
   const [lastWateredDates, setLastWateredDates] = useState<Record<string, Date | null>>(
     () => Object.fromEntries(scheduleGroups.map((group) => [group.name, group.lastWatered ? parseScheduleDate(group.lastWatered) : null])),
+  )
+  const [plantLastWateredDates, setPlantLastWateredDates] = useState<Record<string, Date | null>>(
+    () => Object.fromEntries(plants.filter((plant) => plant.group === "Unassigned").map((plant) => [plant.id, plant.lastWatered ? new Date(plant.lastWatered) : null])),
   )
   const [season, setSeason] = useState<"summer" | "winter">("summer")
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
@@ -138,6 +147,10 @@ function WateringSchedule({ plants, query, onPlantUpdated, onEstimatedUpdated, o
 
   const updateLastWatered = (groupName: string, date: Date | null) => {
     setLastWateredDates((current) => ({ ...current, [groupName]: date }))
+  }
+
+  const updatePlantLastWatered = (plantId: string, date: Date | null) => {
+    setPlantLastWateredDates((current) => ({ ...current, [plantId]: date }))
   }
 
   const groups = [...scheduleGroups]
@@ -197,6 +210,7 @@ function WateringSchedule({ plants, query, onPlantUpdated, onEstimatedUpdated, o
             <p style={{ color: groupColor.accent }} className="flex items-center gap-2 font-bold"><ChevronDown className={`size-4 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />{row.group}</p>
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-2" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+            {row.group !== "Unassigned" ? <>
             <div className="flex min-w-0 items-center gap-1.5">
               {row.lastWatered ? (
                 <span className="relative inline-flex size-5 items-center justify-center text-[#55705a]" title={`Set last watered date for ${row.group}`}>
@@ -221,8 +235,9 @@ function WateringSchedule({ plants, query, onPlantUpdated, onEstimatedUpdated, o
             >
               Water now
             </Button>
+            </> : null}
           </div>
-          {row.nextWateringDates.length > 0 ? (
+          {row.group !== "Unassigned" && row.nextWateringDates.length > 0 ? (
             <span className="font-medium text-[#1f3428]">
               {row.nextWateringDates.map((date, index) => (
                 <span key={date.toISOString()} className="block">
@@ -235,7 +250,7 @@ function WateringSchedule({ plants, query, onPlantUpdated, onEstimatedUpdated, o
             <span className="font-medium text-[#1f3428]">Not recorded</span>
           )}
           </div>
-          {isExpanded && row.plants.length > 0 ? <div className="col-span-full -mx-1 sm:-mx-4">{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} onUpdated={(season, nextGroup, wateringInterval) => onPlantUpdated(plant.id, season, nextGroup, wateringInterval)} onEstimateUpdated={(interval) => onEstimatedUpdated(plant.id, interval)} onWeightAdded={(date, weight) => onWeightAdded(plant.id, date, weight)} />)}</div> : null}
+          {isExpanded && row.plants.length > 0 ? <div className="col-span-full -mx-1 sm:-mx-4">{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} lastWateredDate={plant.group === "Unassigned" ? plantLastWateredDates[plant.id] ?? null : null} onLastWateredUpdated={plant.group === "Unassigned" ? (date) => updatePlantLastWatered(plant.id, date) : undefined} onUpdated={(season, nextGroup, wateringInterval) => onPlantUpdated(plant.id, season, nextGroup, wateringInterval)} onEstimateUpdated={(interval) => onEstimatedUpdated(plant.id, interval)} onWeightAdded={(date, weight) => onWeightAdded(plant.id, date, weight)} />)}</div> : null}
         </div>
       })}
       <div className="flex items-center justify-between gap-3 border-t border-[#d8dfd5] px-1 py-3">
@@ -574,13 +589,15 @@ function PlantScheduleEditor({ plant, onUpdated, onEstimateUpdated }: { plant: P
   )
 }
 
-function PlantCard({ plant, onUpdated, onEstimateUpdated, onWeightAdded, onDeleted, onNameUpdated }: { plant: Plant; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightAdded: (date: string, weight: number) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
+function PlantCard({ plant, lastWateredDate, onLastWateredUpdated, onUpdated, onEstimateUpdated, onWeightAdded, onDeleted, onNameUpdated }: { plant: Plant; lastWateredDate: Date | null; onLastWateredUpdated?: (date: Date | null) => void; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightAdded: (date: string, weight: number) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
   const { current } = getMoisture(plant)
   const groupColor = colorForGroup(plant.group)
   const [weight, setWeight] = useState("")
   const [isSavingWeight, setIsSavingWeight] = useState(false)
   const [weightError, setWeightError] = useState<string | null>(null)
-  const nextWatering = estimatedNextWatering(plant)
+  const nextWatering = plant.group === "Unassigned" && lastWateredDate && plant.estimatedWateringInterval !== null
+    ? addDays(lastWateredDate, plant.estimatedWateringInterval)
+    : null
 
   const saveWeight = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -612,10 +629,22 @@ function PlantCard({ plant, onUpdated, onEstimateUpdated, onWeightAdded, onDelet
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <div role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click() } }} style={{ backgroundColor: groupColor.row, borderColor: groupColor.border }} className="group grid w-full gap-4 border-t px-1 py-4 text-left transition-colors hover:brightness-110 sm:grid-cols-[minmax(13rem,1.25fr)_minmax(12rem,1fr)_minmax(7rem,auto)] sm:items-center sm:px-4">
+        <div role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click() } }} style={{ backgroundColor: groupColor.row, borderColor: groupColor.border }} className={`group relative grid w-full gap-4 border-t px-1 py-4 text-left transition-colors hover:brightness-110 sm:items-center sm:px-4 ${plant.group === "Unassigned" ? "sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)]" : "sm:grid-cols-[minmax(13rem,1.25fr)_minmax(12rem,1fr)_minmax(7rem,auto)]"}`}>
           <div className="flex min-w-0 items-center gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#dfe9d7] text-[#315d42]"><Sprout className="size-4" /></div><div className="min-w-0"><p className="truncate font-semibold text-[#1f3428]">{plant.name}</p></div></div>
-          <div className="min-w-0 text-xs">{plant.group === "Unassigned" ? <><p className="font-medium uppercase tracking-[0.12em] text-[#315d42]">Estimated next watering</p><p className="mt-1 font-semibold text-[#1f3428]">{nextWatering ? `${formatScheduleDate(nextWatering)} (${daysFromToday(nextWatering) > 0 ? "+" : ""}${daysFromToday(nextWatering)} days)` : "Set an interval"}</p></> : null}</div>
-          <div className="flex items-center justify-between gap-3 sm:justify-end"><form onSubmit={saveWeight} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} className="flex items-center gap-1"><Input type="text" inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} placeholder="g" aria-label={`Add today's weight for ${plant.name}`} className="h-8 w-20 border-white/50 bg-black/20 px-2 text-sm text-white placeholder:text-white/70" disabled={isSavingWeight} /><button type="submit" className="sr-only">Save weight</button>{weightError ? <span className="text-xs text-white" role="alert">{weightError}</span> : null}</form><div className="text-left sm:text-right"><p className="font-heading text-xl font-semibold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-xs font-normal text-white">g</span></p><p className="text-[10px] uppercase tracking-[0.12em] text-white">last weight</p></div><ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" /></div>
+          {plant.group === "Unassigned" ? <>
+            <div className="min-w-0 text-sm" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+            <div className="flex items-center gap-1.5">
+              {lastWateredDate ? <span className="relative inline-flex size-5 items-center justify-center text-[#55705a]" title={`Set last watered date for ${plant.name}`}>
+                <CalendarDays className="size-4" aria-hidden="true" />
+                <input type="date" value={dateInputValue(lastWateredDate)} onChange={(event) => onLastWateredUpdated?.(parseInputDate(event.target.value))} aria-label={`Set last watered date for ${plant.name}`} className="absolute inset-0 cursor-pointer opacity-0" />
+              </span> : null}
+              <span className="font-bold text-white">{lastWateredDate ? formatScheduleDate(lastWateredDate) : "Not recorded"}</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => onLastWateredUpdated?.(new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())))} className="h-7 border-[#cbdac8] px-2 text-xs text-[#315d42] hover:bg-[#eef3eb]">Water now</Button>
+            </div>
+            </div>
+            <div className="min-w-0 text-sm font-medium text-[#1f3428]">{nextWatering ? <><span>{formatScheduleDate(nextWatering)}</span> <strong className="font-bold text-[#315d42]">({daysFromToday(nextWatering) > 0 ? "+" : ""}{daysFromToday(nextWatering)} days)</strong></> : "Set an interval"}</div>
+          </> : <div className="min-w-0" />}
+          <div className={`flex items-center justify-between gap-3 sm:justify-end ${plant.group === "Unassigned" ? "sm:absolute sm:right-4 sm:top-1/2 sm:-translate-y-1/2" : ""}`}><form onSubmit={saveWeight} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} className="flex items-center gap-1"><Input type="text" inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} placeholder="g" aria-label={`Enter current weight for ${plant.name}`} className="h-8 w-20 border-white/50 bg-black/20 px-2 text-sm text-white placeholder:text-white/70" disabled={isSavingWeight} /><button type="submit" className="sr-only">Save weight</button>{weightError ? <span className="text-xs text-white" role="alert">{weightError}</span> : null}</form><div className="text-left sm:text-right"><p className="font-heading text-xl font-semibold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-xs font-normal text-white">g</span></p><p className="text-[10px] uppercase tracking-[0.12em] text-white">{formatDaysAgo(plant.history.at(-1)?.date)}</p></div><ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" /></div>
         </div>
       </DialogTrigger>
       <PlantHistory plant={plant} percentage={getMoisture(plant).percentage} onUpdated={onUpdated} onEstimateUpdated={onEstimateUpdated} onDeleted={onDeleted ?? (() => window.location.reload())} onNameUpdated={onNameUpdated ?? (() => window.location.reload())} />
