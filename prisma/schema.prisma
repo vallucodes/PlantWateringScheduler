@@ -22,7 +22,7 @@ model WateringGroup {
 }
 
 model Plant {
-  id                String        @id @default(cuid())
+  id                Int           @id
   name              String
   minWeight         Float?
   maxWeight         Float?
@@ -39,9 +39,10 @@ model Plant {
 
 model WeightLog {
   id        String   @id @default(cuid())
-  weight    Float
+  weight    Float?
+  watered   Boolean  @default(false)
   date      DateTime
-  plantId   String
+  plantId   Int
   plant     Plant    @relation(fields: [plantId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 
 export const dynamic = "force-dynamic"
 
-function buildHistory(weightLogs: { date: Date; weight: number }[]) {
+function buildHistory(weightLogs: { date: Date; weight: number | null }[]) {
   if (weightLogs.length === 0) return []
 
   const firstDate = new Date(weightLogs[0].date)

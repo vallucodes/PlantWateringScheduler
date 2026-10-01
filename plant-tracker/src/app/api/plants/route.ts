@@ -34,6 +34,8 @@ export async function POST(request: Request) {
   }
 
   const plant = await prisma.$transaction(async (transaction) => {
+    const highestPlantId = await transaction.plant.aggregate({ _max: { id: true } })
+    const id = (highestPlantId._max.id ?? -1) + 1
     const lowestManualRow = await transaction.plant.aggregate({ _min: { sourceRow: true } })
     const sourceRow = Math.min(-1, (lowestManualRow._min.sourceRow ?? 0) - 1)
     const groupKey = intervalDays === null ? "unassigned" : String(intervalDays)
@@ -55,6 +57,7 @@ export async function POST(request: Request) {
 
     return transaction.plant.create({
       data: {
+        id,
         name,
         minWeight,
         maxWeight,

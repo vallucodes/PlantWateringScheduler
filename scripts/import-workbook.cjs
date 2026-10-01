@@ -80,6 +80,9 @@ async function main() {
         where: { sourceRow: { gt: 0, notIn: plantRows.map(({ sourceRow }) => sourceRow) } },
       });
 
+      const highestPlantId = await transaction.plant.aggregate({ _max: { id: true } });
+      let nextPlantId = (highestPlantId._max.id ?? -1) + 1;
+
       for (const { row, sourceRow } of plantRows) {
         const group = parseGroup(row[0]);
         const wateringGroup = await transaction.wateringGroup.upsert({
@@ -105,6 +108,7 @@ async function main() {
             winterWateringGroupId: winterWateringGroup.id,
           },
           create: {
+            id: nextPlantId++,
             name: textOrNull(row[2]),
             minWeight: isNumber(row[3]) ? row[3] : null,
             maxWeight: isNumber(row[4]) ? row[4] : null,

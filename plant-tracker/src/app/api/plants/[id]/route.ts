@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma"
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const plantId = Number(id)
+  if (!Number.isInteger(plantId) || plantId < 0) return Response.json({ error: "Invalid plant ID." }, { status: 400 })
   const body = await request.json().catch(() => null)
   const hasName = Object.prototype.hasOwnProperty.call(body ?? {}, "name")
   const hasInterval = Object.prototype.hasOwnProperty.call(body ?? {}, "intervalDays")
@@ -20,11 +22,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return Response.json({ error: "Winter interval must be a whole number from 1 to 365 days." }, { status: 400 })
   }
 
-  const plant = await prisma.plant.findUnique({ where: { id } })
+  const plant = await prisma.plant.findUnique({ where: { id: plantId } })
   if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
 
   if (!hasInterval && !hasWinterInterval) {
-    const updatedPlant = await prisma.plant.update({ where: { id }, data: { name } })
+    const updatedPlant = await prisma.plant.update({ where: { id: plantId }, data: { name } })
     return Response.json({ name: updatedPlant.name })
   }
 
@@ -48,7 +50,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   })
 
   await prisma.plant.update({
-    where: { id },
+    where: { id: plantId },
     data: { ...(hasName ? { name } : {}), wateringGroupId: wateringGroup.id, winterWateringGroupId: winterWateringGroup.id },
   })
 
@@ -57,22 +59,50 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const plantId = Number(id)
+  if (!Number.isInteger(plantId) || plantId < 0) return Response.json({ error: "Invalid plant ID." }, { status: 400 })
   const body = await request.json().catch(() => null)
+
+  if (body?.action === "water") {
+    const plant = await prisma.plant.findUnique({ where: { id: plantId }, select: { wateringGroupId: true } })
+    if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
+    if (!plant.wateringGroupId) return Response.json({ error: "Plant has no watering group." }, { status: 400 })
+
+    const now = new Date()
+    const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    const groupPlants = await prisma.plant.findMany({
+      where: { wateringGroupId: plant.wateringGroupId },
+      select: { id: true },
+    })
+
+    await prisma.$transaction(
+      groupPlants.map(({ id: plantId }) =>
+        prisma.weightLog.upsert({
+          where: { plantId_date: { plantId, date } },
+          update: { watered: true },
+          create: { plantId, date, weight: null, watered: true },
+        }),
+      ),
+    )
+
+    return Response.json({ date: date.toISOString(), plantIds: groupPlants.map(({ id: plantId }) => plantId) })
+  }
+
   const weight = typeof body?.weight === "number" ? body.weight : Number(body?.weight)
 
   if (!Number.isFinite(weight) || weight < 0) {
     return Response.json({ error: "Weight must be zero or greater." }, { status: 400 })
   }
 
-  const plant = await prisma.plant.findUnique({ where: { id }, select: { id: true } })
+  const plant = await prisma.plant.findUnique({ where: { id: plantId }, select: { id: true } })
   if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
 
   const now = new Date()
   const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
   const weightLog = await prisma.weightLog.upsert({
-    where: { plantId_date: { plantId: id, date } },
+    where: { plantId_date: { plantId, date } },
     update: { weight },
-    create: { plantId: id, date, weight },
+    create: { plantId, date, weight },
   })
 
   return Response.json({ date: weightLog.date.toISOString(), weight: weightLog.weight })
@@ -80,17 +110,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const plant = await prisma.plant.findUnique({ where: { id }, select: { id: true } })
+  const plantId = Number(id)
+  if (!Number.isInteger(plantId) || plantId < 0) return Response.json({ error: "Invalid plant ID." }, { status: 400 })
+  const plant = await prisma.plant.findUnique({ where: { id: plantId }, select: { id: true } })
   if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
 
   if (new URL(request.url).searchParams.get("weight") === "latest") {
-    const latestWeight = await prisma.weightLog.findFirst({ where: { plantId: id }, orderBy: { date: "desc" } })
+    const latestWeight = await prisma.weightLog.findFirst({ where: { plantId }, orderBy: { date: "desc" } })
     if (!latestWeight) return Response.json({ error: "No weight history to remove." }, { status: 404 })
 
     await prisma.weightLog.delete({ where: { id: latestWeight.id } })
     return Response.json({ date: latestWeight.date.toISOString() })
   }
 
-  await prisma.plant.delete({ where: { id } })
+  await prisma.plant.delete({ where: { id: plantId } })
   return new Response(null, { status: 204 })
 }
