@@ -245,7 +245,7 @@ function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEsti
             className="grid cursor-pointer grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] items-center gap-4 px-1 py-3.5 text-sm transition-colors hover:brightness-110 sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)]"
           >
           <div>
-            <p style={{ color: groupColor.accent }} className="flex items-center gap-2 font-bold"><ChevronDown className={`size-4 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />{row.group}</p>
+            <p style={{ color: groupColor.accent }} className="flex items-center gap-2 font-heading text-4xl font-bold tracking-tight"><ChevronDown className={`size-4 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />{row.group}</p>
           </div>
           <div className="flex min-w-0 items-center gap-2">
             {row.group !== "Unassigned" ? <>
