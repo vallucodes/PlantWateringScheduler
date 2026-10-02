@@ -39,6 +39,9 @@ export default async function Home() {
     },
     orderBy: { sourceRow: "asc" },
   })
+  const wateringGroups = await prisma.wateringGroup.findMany({
+    select: { key: true, name: true, lastWateredAt: true },
+  })
   const latestLogDate = plants
     .flatMap((plant) => plant.weightLogs.map((log) => log.date))
     .sort((firstDate, secondDate) => secondDate.getTime() - firstDate.getTime())[0]
@@ -47,6 +50,11 @@ export default async function Home() {
   return (
     <PlantDashboard
       lastUpdated={latestLogDate}
+      groupDates={wateringGroups.map((group) => ({
+        season: group.key.startsWith("winter:") ? "winter" as const : "summer" as const,
+        name: group.name,
+        date: group.lastWateredAt?.toISOString() ?? null,
+      }))}
       plants={plants.map((plant) => {
         const latestWeight = plant.weightLogs.at(-1)?.weight ?? 0
 
@@ -55,10 +63,11 @@ export default async function Home() {
           name: plant.name,
           group: plant.wateringGroup?.name ?? "Unassigned",
           wateringInterval: plant.wateringGroup?.intervalDays ?? null,
+          lastWatered: plant.wateringGroup?.lastWateredAt?.toISOString() ?? null,
           winterGroup: plant.winterWateringGroup?.name ?? "Winter Unassigned",
           winterWateringInterval: plant.winterWateringGroup?.intervalDays ?? null,
+          winterLastWatered: plant.winterWateringGroup?.lastWateredAt?.toISOString() ?? null,
           estimatedWateringInterval: plant.estimatedWateringInterval,
-          lastWatered: plant.weightLogs.at(-1)?.date.toISOString() ?? null,
           room: plant.wateringGroup?.intervalDays
             ? `Every ${plant.wateringGroup.intervalDays} days`
             : "No schedule",

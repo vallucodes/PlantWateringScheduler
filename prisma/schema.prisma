@@ -15,6 +15,7 @@ model WateringGroup {
   key               String  @unique
   name              String
   intervalDays      Int?
+  lastWateredAt     DateTime?
   plants            Plant[]
   winterPlants      Plant[] @relation("WinterWateringGroups")
   createdAt         DateTime @default(now())

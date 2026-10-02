@@ -64,6 +64,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!Number.isInteger(plantId) || plantId < 0) return Response.json({ error: "Invalid plant ID." }, { status: 400 })
   const body = await request.json().catch(() => null)
 
+  if (body?.action === "setLastWatered") {
+    const season = body?.season === "winter" ? "winter" : "summer"
+    const dateValue = body?.date === null ? null : typeof body?.date === "string" ? body.date : null
+    const date = dateValue === null ? null : new Date(`${dateValue}T00:00:00.000Z`)
+    if (dateValue !== null && (!date || !/^\d{4}-\d{2}-\d{2}$/.test(dateValue) || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== dateValue)) {
+      return Response.json({ error: "Date must be a valid calendar day." }, { status: 400 })
+    }
+
+    const plant = await prisma.plant.findUnique({
+      where: { id: plantId },
+      select: { wateringGroupId: true, winterWateringGroupId: true },
+    })
+    if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
+
+    const groupId = season === "winter" ? plant.winterWateringGroupId : plant.wateringGroupId
+    if (!groupId) return Response.json({ error: "Plant has no watering group." }, { status: 400 })
+
+    const group = await prisma.wateringGroup.update({
+      where: { id: groupId },
+      data: { lastWateredAt: date },
+      select: { lastWateredAt: true },
+    })
+    return Response.json({ date: group.lastWateredAt?.toISOString() ?? null })
+  }
+
   if (body?.action === "water") {
     const season = body?.season === "winter" ? "winter" : "summer"
     const plant = await prisma.plant.findUnique({ where: { id: plantId }, select: { wateringGroupId: true, winterWateringGroupId: true } })
@@ -78,15 +103,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       select: { id: true },
     })
 
-    await prisma.$transaction(
-      groupPlants.map(({ id: plantId }) =>
+    await prisma.$transaction([
+      prisma.wateringGroup.update({ where: { id: groupId }, data: { lastWateredAt: date } }),
+      ...groupPlants.map(({ id: plantId }) =>
         prisma.weightLog.upsert({
           where: { plantId_date: { plantId, date } },
           update: { watered: true },
           create: { plantId, date, weight: null, watered: true },
         }),
       ),
-    )
+    ])
 
     return Response.json({ date: date.toISOString(), plantIds: groupPlants.map(({ id: plantId }) => plantId) })
   }
@@ -97,11 +123,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return Response.json({ error: "Weight must be zero or greater." }, { status: 400 })
   }
 
+  const dateValue = typeof body?.date === "string" ? body.date : null
+  const date = dateValue
+    ? new Date(`${dateValue}T00:00:00.000Z`)
+    : new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()))
+  if (dateValue && (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue) || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== dateValue)) {
+    return Response.json({ error: "Date must be a valid calendar day." }, { status: 400 })
+  }
+
   const plant = await prisma.plant.findUnique({ where: { id: plantId }, select: { id: true } })
   if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
 
-  const now = new Date()
-  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
   const weightLog = await prisma.weightLog.upsert({
     where: { plantId_date: { plantId, date } },
     update: { weight },

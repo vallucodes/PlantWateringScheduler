@@ -6,6 +6,8 @@ import {
   ArrowUpRight,
   CalendarDays,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
   Droplets,
@@ -52,6 +54,7 @@ export type Plant = {
   wateringInterval: number | null
   winterGroup: string
   winterWateringInterval: number | null
+  winterLastWatered: string | null
   estimatedWateringInterval: number | null
   lastWatered: string | null
   room: string
@@ -67,14 +70,28 @@ type ScheduleGroup = {
   intervalEnd: number | null
 }
 
+type PersistedGroupDate = {
+  season: "summer" | "winter"
+  name: string
+  date: string | null
+}
+
+function wateringDateKey(season: "summer" | "winter", groupName: string) {
+  return `${season}:${groupName}`
+}
+
+function plantWateringDateKey(season: "summer" | "winter", plantId: number) {
+  return `${season}:${plantId}`
+}
+
 const scheduleGroups: ScheduleGroup[] = [
-  { name: "30", lastWatered: "07.09", intervalStart: 30, intervalEnd: 30 },
-  { name: "20", lastWatered: "07.09", intervalStart: 20, intervalEnd: 20 },
-  { name: "14", lastWatered: "07.09", intervalStart: 14, intervalEnd: 14 },
-  { name: "9", lastWatered: "10.09", intervalStart: 9, intervalEnd: 9 },
-  { name: "7", lastWatered: "17.09", intervalStart: 7, intervalEnd: 7 },
-  { name: "5", lastWatered: "14.09", intervalStart: 5, intervalEnd: 5 },
-  { name: "2", lastWatered: "23.09", intervalStart: 2, intervalEnd: 2 },
+  { name: "30", lastWatered: null, intervalStart: 30, intervalEnd: 30 },
+  { name: "20", lastWatered: null, intervalStart: 20, intervalEnd: 20 },
+  { name: "14", lastWatered: null, intervalStart: 14, intervalEnd: 14 },
+  { name: "9", lastWatered: null, intervalStart: 9, intervalEnd: 9 },
+  { name: "7", lastWatered: null, intervalStart: 7, intervalEnd: 7 },
+  { name: "5", lastWatered: null, intervalStart: 5, intervalEnd: 5 },
+  { name: "2", lastWatered: null, intervalStart: 2, intervalEnd: 2 },
   { name: "Unassigned", lastWatered: null, intervalStart: null, intervalEnd: null },
 ]
 
@@ -146,11 +163,6 @@ function addDays(date: Date, days: number) {
   return nextDate
 }
 
-function parseScheduleDate(value: string) {
-  const [day, month] = value.split(".").map(Number)
-  return new Date(Date.UTC(2026, month - 1, day))
-}
-
 function dateInputValue(date: Date | null) {
   return date ? date.toISOString().slice(0, 10) : ""
 }
@@ -191,23 +203,66 @@ function NextWateringColumn({ children }: { children: React.ReactNode }) {
   )
 }
 
-function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEstimatedUpdated, onWeightAdded, onWeightRemoved, onGroupWatered }: { plants: Plant[]; query: string; onQueryChange: (query: string) => void; onPlantUpdated: (plantId: number, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: number, interval: number | null) => void; onWeightAdded: (plantId: number, date: string, weight: number) => void; onWeightRemoved: (plantId: number, date: string) => void; onGroupWatered: (plantId: number, season: "summer" | "winter") => Promise<string> }) {
+function MondayCalendar({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const selectedDate = new Date(`${value}T00:00:00.000Z`)
+  const [visibleMonth, setVisibleMonth] = useState(() => new Date(Date.UTC(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth(), 1)))
+  const firstWeekday = (visibleMonth.getUTCDay() + 6) % 7
+  const daysInMonth = new Date(Date.UTC(visibleMonth.getUTCFullYear(), visibleMonth.getUTCMonth() + 1, 0)).getUTCDate()
+  const days = Array.from({ length: firstWeekday + daysInMonth }, (_, index) => index < firstWeekday ? null : index - firstWeekday + 1)
+  const monthLabel = visibleMonth.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })
+  const selectedDateLabel = selectedDate.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" })
+
+  const selectDay = (day: number) => {
+    const selected = new Date(Date.UTC(visibleMonth.getUTCFullYear(), visibleMonth.getUTCMonth(), day))
+    onChange(selected.toISOString().slice(0, 10))
+    setOpen(false)
+  }
+
+  return (
+    <div className="relative">
+      <Button type="button" variant="outline" size="sm" aria-label="Choose measurement date" title="Choose measurement date" onClick={() => setOpen((current) => !current)} disabled={disabled} className="h-8 border-[#cbdac8] px-2 text-[#55705a] hover:bg-[#eef3eb]">
+        <CalendarDays className="size-3.5" />
+        <span>{selectedDateLabel}</span>
+      </Button>
+      {open ? <div className="absolute bottom-10 left-0 z-20 w-64 rounded-md border border-[#d8dfd5] bg-[#fbfcf8] p-3 shadow-lg">
+        <div className="mb-2 flex items-center justify-between text-sm font-medium text-[#315d42]">
+          <button type="button" aria-label="Previous month" onClick={() => setVisibleMonth((current) => new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() - 1, 1)))} className="rounded p-1 hover:bg-[#eef3eb]"><ChevronLeft className="size-4" /></button>
+          <span>{monthLabel}</span>
+          <button type="button" aria-label="Next month" onClick={() => setVisibleMonth((current) => new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1)))} className="rounded p-1 hover:bg-[#eef3eb]"><ChevronRight className="size-4" /></button>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-[#889488]">{["M", "T", "W", "T", "F", "S", "S"].map((day, index) => <span key={`${day}-${index}`}>{day}</span>)}</div>
+        <div className="mt-1 grid grid-cols-7 gap-1 text-center text-xs">{days.map((day, index) => day === null ? <span key={`empty-${index}`} /> : <button key={day} type="button" onClick={() => selectDay(day)} className={`rounded p-1.5 text-[#315d42] hover:bg-[#dfe9d7] ${value === new Date(Date.UTC(visibleMonth.getUTCFullYear(), visibleMonth.getUTCMonth(), day)).toISOString().slice(0, 10) ? "bg-[#315d42] text-white hover:bg-[#315d42]" : ""}`}>{day}</button>)}</div>
+      </div> : null}
+    </div>
+  )
+}
+
+function WateringSchedule({ plants, groupDates, query, onQueryChange, onPlantUpdated, onEstimatedUpdated, onWeightAdded, onWeightRemoved, onGroupWatered, onLastWateredChanged }: { plants: Plant[]; groupDates: PersistedGroupDate[]; query: string; onQueryChange: (query: string) => void; onPlantUpdated: (plantId: number, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: number, interval: number | null) => void; onWeightAdded: (plantId: number, date: string, weight: number) => void; onWeightRemoved: (plantId: number, date: string) => void; onGroupWatered: (plantId: number, season: "summer" | "winter") => Promise<string>; onLastWateredChanged: (plantId: number | null, season: "summer" | "winter", date: string | null, groupKey?: string) => Promise<string | null> }) {
   const [lastWateredDates, setLastWateredDates] = useState<Record<string, Date | null>>(
-    () => Object.fromEntries(scheduleGroups.map((group) => [group.name, group.lastWatered ? parseScheduleDate(group.lastWatered) : null])),
+    () => Object.fromEntries([
+      ...scheduleGroups.map((group) => [wateringDateKey("summer", group.name), null]),
+      ...groupDates.map((group) => [wateringDateKey(group.season, group.name), group.date ? new Date(group.date) : null]),
+      ...plants.map((plant) => [wateringDateKey("summer", plant.group), plant.lastWatered ? new Date(plant.lastWatered) : null]),
+      ...plants.map((plant) => [wateringDateKey("winter", plant.winterGroup), plant.winterLastWatered ? new Date(plant.winterLastWatered) : null]),
+    ]),
   )
   const [plantLastWateredDates, setPlantLastWateredDates] = useState<Record<string, Date | null>>(
-    () => Object.fromEntries(plants.filter((plant) => plant.group === "Unassigned").map((plant) => [plant.id, plant.lastWatered ? new Date(plant.lastWatered) : null])),
+    () => Object.fromEntries([
+      ...plants.filter((plant) => plant.group === "Unassigned").map((plant) => [plantWateringDateKey("summer", plant.id), plant.lastWatered ? new Date(plant.lastWatered) : null]),
+      ...plants.filter((plant) => plant.winterWateringInterval === null).map((plant) => [plantWateringDateKey("winter", plant.id), plant.winterLastWatered ? new Date(plant.winterLastWatered) : null]),
+    ]),
   )
   const [season, setSeason] = useState<"summer" | "winter">("summer")
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [wateringGroup, setWateringGroup] = useState<string | null>(null)
 
-  const updateLastWatered = (groupName: string, date: Date | null) => {
-    setLastWateredDates((current) => ({ ...current, [groupName]: date }))
+  const updateLastWatered = (seasonName: "summer" | "winter", groupName: string, date: Date | null) => {
+    setLastWateredDates((current) => ({ ...current, [wateringDateKey(seasonName, groupName)]: date }))
   }
 
-  const updatePlantLastWatered = (plantId: number, date: Date | null) => {
-    setPlantLastWateredDates((current) => ({ ...current, [plantId]: date }))
+  const updatePlantLastWatered = (seasonName: "summer" | "winter", plantId: number, date: Date | null) => {
+    setPlantLastWateredDates((current) => ({ ...current, [plantWateringDateKey(seasonName, plantId)]: date }))
   }
 
   const seasonPlants = plants.map((plant) => ({
@@ -251,7 +306,7 @@ function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEsti
   })
 
   const rows = groups.map((group) => {
-    const lastWateredDate = lastWateredDates[group.name]
+    const lastWateredDate = lastWateredDates[wateringDateKey(season, group.name)]
     const nextWateringDates = lastWateredDate && group.intervalStart !== null && group.intervalEnd !== null
       ? group.intervalStart === group.intervalEnd
         ? [addDays(lastWateredDate, group.intervalStart)]
@@ -323,15 +378,21 @@ function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEsti
                 <CalendarDays className="size-4" aria-hidden="true" />
                 <input
                   type="date"
-                  value={dateInputValue(lastWateredDates[row.group])}
-                  onChange={(event) => updateLastWatered(row.group, parseInputDate(event.target.value))}
+                  value={dateInputValue(lastWateredDates[wateringDateKey(season, row.group)])}
+                  onChange={async (event) => {
+                    const date = parseInputDate(event.target.value)
+                    const groupPlant = seasonPlants.find((plant) => plant.group === row.group)
+                    const groupKey = row.group === "Unassigned" ? "unassigned" : row.group
+                    const savedDate = await onLastWateredChanged(groupPlant?.id ?? null, season, date ? date.toISOString().slice(0, 10) : null, groupPlant ? undefined : groupKey)
+                    updateLastWatered(season, row.group, savedDate ? new Date(savedDate) : null)
+                  }}
                   onClick={(event) => event.stopPropagation()}
                   onKeyDown={(event) => event.stopPropagation()}
                   aria-label={`Set last watered date for ${row.group}`}
                   className="absolute inset-0 cursor-pointer opacity-0"
                 />
               </span>
-              <span className="font-bold tabular-nums text-white">{row.lastWatered ? formatScheduleDate(lastWateredDates[row.group] as Date) : "Not recorded"}</span>
+              <span className="font-bold tabular-nums text-white">{row.lastWatered ? formatScheduleDate(lastWateredDates[wateringDateKey(season, row.group)] as Date) : "Not recorded"}</span>
             </div>
             <Button
               type="button"
@@ -344,7 +405,7 @@ function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEsti
                 setWateringGroup(row.group)
                 try {
                   const date = await onGroupWatered(groupPlant.id, season)
-                  updateLastWatered(row.group, new Date(date))
+                  updateLastWatered(season, row.group, new Date(date))
                 } finally {
                   setWateringGroup(null)
                 }
@@ -374,7 +435,7 @@ function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEsti
             </NextWateringColumn>
           )}
           </div>
-          {isExpanded && row.plants.length > 0 ? <div>{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} groupColor={groupColor} lastWateredDate={plant.group === "Unassigned" ? plantLastWateredDates[plant.id] ?? null : null} onLastWateredUpdated={plant.group === "Unassigned" ? (date) => updatePlantLastWatered(plant.id, date) : undefined} onUpdated={(season, nextGroup, wateringInterval) => onPlantUpdated(plant.id, season, nextGroup, wateringInterval)} onEstimateUpdated={(interval) => onEstimatedUpdated(plant.id, interval)} onWeightAdded={(date, weight) => onWeightAdded(plant.id, date, weight)} onWeightRemoved={(date) => onWeightRemoved(plant.id, date)} />)}</div> : null}
+          {isExpanded && row.plants.length > 0 ? <div>{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} groupColor={groupColor} lastWateredDate={plant.group === "Unassigned" ? plantLastWateredDates[plantWateringDateKey(season, plant.id)] ?? null : null} onLastWateredUpdated={plant.group === "Unassigned" ? async (date) => { const savedDate = await onLastWateredChanged(plant.id, season, date ? date.toISOString().slice(0, 10) : null); updatePlantLastWatered(season, plant.id, savedDate ? new Date(savedDate) : null) } : undefined} onUpdated={(season, nextGroup, wateringInterval) => onPlantUpdated(plant.id, season, nextGroup, wateringInterval)} onEstimateUpdated={(interval) => onEstimatedUpdated(plant.id, interval)} onWeightAdded={(date, weight) => onWeightAdded(plant.id, date, weight)} onWeightRemoved={(date) => onWeightRemoved(plant.id, date)} />)}</div> : null}
         </div>
       })}
       <div className="flex items-center justify-between gap-3 border-t border-[#d8dfd5] px-1 py-3">
@@ -387,7 +448,7 @@ function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEsti
           className="flex items-center gap-2 rounded-md border border-[#d8dfd5] px-2.5 py-1.5 text-xs font-medium text-[#55705a] transition-colors hover:bg-[#eef3eb]"
         >
           {season === "summer" ? <SunMedium className="size-3.5" /> : <Snowflake className="size-3.5" />}
-          {season === "summer" ? "Summer" : "Winter (2x interval)"}
+          {season === "summer" ? "Summer" : "Winter "}
         </button>
       </div>
     </div>
@@ -410,10 +471,14 @@ function getWeightAxis(dataMin: number, dataMax: number) {
   return { domain: [minimum, maximum] as [number, number], ticks }
 }
 
-function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onDeleted, onNameUpdated }: { plant: Plant; percentage: number; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onDeleted: () => void; onNameUpdated: (name: string) => void }) {
+function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeightAdded, onDeleted, onNameUpdated }: { plant: Plant; percentage: number; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightAdded: (date: string, weight: number) => void; onDeleted: () => void; onNameUpdated: (name: string) => void }) {
   const [range, setRange] = useState({ startIndex: 0, endIndex: Math.max(0, plant.history.length - 1) })
   const [selectionStart, setSelectionStart] = useState<number | null>(null)
   const [selectionEnd, setSelectionEnd] = useState<number | null>(null)
+  const [measurementDate, setMeasurementDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [measurementWeight, setMeasurementWeight] = useState("")
+  const [measurementError, setMeasurementError] = useState<string | null>(null)
+  const [isSavingMeasurement, setIsSavingMeasurement] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const visibleHistory = plant.history.slice(range.startIndex, range.endIndex + 1)
@@ -458,6 +523,33 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onDelet
     setRange(fullRange)
     setSelectionStart(null)
     setSelectionEnd(null)
+  }
+
+  const saveMeasurement = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const parsedWeight = Number(measurementWeight)
+    if (!measurementDate || !Number.isFinite(parsedWeight) || parsedWeight < 0) {
+      setMeasurementError("Enter a valid date and weight.")
+      return
+    }
+
+    setMeasurementError(null)
+    setIsSavingMeasurement(true)
+    try {
+      const response = await fetch(`/api/plants/${plant.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: measurementDate, weight: parsedWeight }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error ?? "Could not save measurement.")
+      onWeightAdded(result.date, result.weight)
+      setMeasurementWeight("")
+    } catch (saveError) {
+      setMeasurementError(saveError instanceof Error ? saveError.message : "Could not save measurement.")
+    } finally {
+      setIsSavingMeasurement(false)
+    }
   }
 
   const deletePlant = async () => {
@@ -514,6 +606,18 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onDelet
             <Line type="monotone" dataKey="weight" connectNulls={false} isAnimationActive={false} stroke="#467555" strokeWidth={3} dot={{ fill: "#fbfcf8", stroke: "#467555", strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} />
           </LineChart>
         </ChartContainer>
+        <form onSubmit={saveMeasurement} className="mt-5 flex flex-wrap items-end justify-start gap-2 border-t border-[#e4e9e1] pt-4">
+          <label className="block text-sm font-medium text-[#315d42]" htmlFor={`measurement-date-${plant.id}`}>
+            <span className="sr-only">Date</span>
+            <MondayCalendar value={measurementDate} onChange={setMeasurementDate} disabled={isSavingMeasurement} />
+          </label>
+          <label className="block w-full text-sm font-medium text-[#315d42] sm:w-28" htmlFor={`measurement-weight-${plant.id}`}>
+            <span className="sr-only">Weight (g)</span>
+            <Input id={`measurement-weight-${plant.id}`} type="number" min="0" step="0.1" aria-label="Weight in grams" value={measurementWeight} onChange={(event) => setMeasurementWeight(event.target.value)} placeholder="Weight (g)" className="h-8 border-[#cbdac8] bg-white" disabled={isSavingMeasurement} />
+          </label>
+          <Button type="submit" disabled={isSavingMeasurement}>{isSavingMeasurement ? "Saving..." : "Add weight"}</Button>
+          {measurementError ? <p className="text-sm text-[#bd5b45] sm:col-span-3" role="alert">{measurementError}</p> : null}
+        </form>
         <div className="mt-5 flex items-center justify-between border-t border-[#e4e9e1] pt-4">
           {deleteError ? <p className="text-sm text-[#bd5b45]" role="alert">{deleteError}</p> : <span />}
           <Button type="button" variant="destructive" size="sm" onClick={deletePlant} disabled={isDeleting}>
@@ -713,7 +817,7 @@ function PlantScheduleEditor({ plant, onUpdated, onEstimateUpdated }: { plant: P
   )
 }
 
-function PlantCard({ plant, groupColor, lastWateredDate, onLastWateredUpdated, onUpdated, onEstimateUpdated, onWeightAdded, onWeightRemoved, onDeleted, onNameUpdated }: { plant: Plant; groupColor: GroupColor; lastWateredDate: Date | null; onLastWateredUpdated?: (date: Date | null) => void; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightAdded: (date: string, weight: number) => void; onWeightRemoved: (date: string) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
+function PlantCard({ plant, groupColor, lastWateredDate, onLastWateredUpdated, onUpdated, onEstimateUpdated, onWeightAdded, onWeightRemoved, onDeleted, onNameUpdated }: { plant: Plant; groupColor: GroupColor; lastWateredDate: Date | null; onLastWateredUpdated?: (date: Date | null) => Promise<void>; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightAdded: (date: string, weight: number) => void; onWeightRemoved: (date: string) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
   const { current, percentage } = getMoisture(plant)
   const [weight, setWeight] = useState("")
   const [isSavingWeight, setIsSavingWeight] = useState(false)
@@ -795,12 +899,12 @@ function PlantCard({ plant, groupColor, lastWateredDate, onLastWateredUpdated, o
             <div className="flex shrink-0 items-center gap-2 text-sm">
               <div className="flex w-[5.25rem] shrink-0 items-center gap-1.5">
                 <span className="relative inline-flex size-5 shrink-0 items-center justify-center text-[#55705a]" title={`Set last watered date for ${plant.name}`}>
-                  <CalendarDays className="size-4" aria-hidden="true" />
-                  <input type="date" value={dateInputValue(lastWateredDate)} onChange={(event) => onLastWateredUpdated?.(parseInputDate(event.target.value))} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} aria-label={`Set last watered date for ${plant.name}`} className="absolute inset-0 cursor-pointer opacity-0" />
+                  <CalendarDays className="size-3.5" aria-hidden="true" />
+                  <input type="date" lang="en-GB" value={dateInputValue(lastWateredDate)} onChange={async (event) => { const date = parseInputDate(event.target.value); await onLastWateredUpdated?.(date) }} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} aria-label={`Set last watered date for ${plant.name}`} className="absolute inset-0 cursor-pointer opacity-0" />
                 </span>
                 <span className="font-bold tabular-nums text-white">{lastWateredDate ? formatScheduleDate(lastWateredDate) : "Not recorded"}</span>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={(event) => { event.stopPropagation(); onLastWateredUpdated?.(new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()))) }} onKeyDown={(event) => event.stopPropagation()} className="h-7 shrink-0 border-[#cbdac8] px-2 text-xs text-[#315d42] hover:bg-[#eef3eb]">Water now</Button>
+              <Button type="button" variant="outline" size="sm" onClick={async (event) => { event.stopPropagation(); await onLastWateredUpdated?.(new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()))) }} onKeyDown={(event) => event.stopPropagation()} className="h-7 shrink-0 border-[#cbdac8] px-2 text-xs text-[#315d42] hover:bg-[#eef3eb]">Water now</Button>
             </div>
             <div className="min-h-px min-w-0 flex-1" />
             <div className="shrink-0 whitespace-nowrap text-sm font-medium text-[#1f3428]">{nextWatering ? <><span>{formatScheduleDate(nextWatering)}</span> <strong className="font-bold text-[#315d42]">({daysFromToday(nextWatering) > 0 ? "+" : ""}{daysFromToday(nextWatering)} days)</strong></> : "Set an interval"}</div>
@@ -825,7 +929,7 @@ function PlantCard({ plant, groupColor, lastWateredDate, onLastWateredUpdated, o
           </div>}
         </div>
       </DialogTrigger>
-      <PlantHistory plant={plant} percentage={getMoisture(plant).percentage} onUpdated={onUpdated} onEstimateUpdated={onEstimateUpdated} onDeleted={onDeleted ?? (() => window.location.reload())} onNameUpdated={onNameUpdated ?? (() => window.location.reload())} />
+      <PlantHistory plant={plant} percentage={getMoisture(plant).percentage} onUpdated={onUpdated} onEstimateUpdated={onEstimateUpdated} onWeightAdded={onWeightAdded} onDeleted={onDeleted ?? (() => window.location.reload())} onNameUpdated={onNameUpdated ?? (() => window.location.reload())} />
     </Dialog>
   )
 }
@@ -902,7 +1006,7 @@ function CreatePlantDialog({ onCreated }: { onCreated: (plant: Plant) => void })
   )
 }
 
-export default function PlantDashboard({ plants, lastUpdated }: { plants: Plant[]; lastUpdated: string }) {
+export default function PlantDashboard({ plants, groupDates, lastUpdated }: { plants: Plant[]; groupDates: PersistedGroupDate[]; lastUpdated: string }) {
   const [plantList, setPlantList] = useState(plants)
   const [query, setQuery] = useState("")
   const needsAttention = plantList.filter((plant) => getMoisture(plant).percentage < 50).length
@@ -914,6 +1018,7 @@ export default function PlantDashboard({ plants, lastUpdated }: { plants: Plant[
       const history = plant.history.some((entry) => entry.date === dateLabel)
         ? plant.history.map((entry) => entry.date === dateLabel ? { ...entry, weight } : entry)
         : [...plant.history, { date: dateLabel, weight }]
+      history.sort((firstEntry, secondEntry) => new Date(`${firstEntry.date}, ${new Date().getUTCFullYear()}`).getTime() - new Date(`${secondEntry.date}, ${new Date().getUTCFullYear()}`).getTime())
       return { ...plant, history }
     }))
   }
@@ -934,13 +1039,24 @@ export default function PlantDashboard({ plants, lastUpdated }: { plants: Plant[
     return result.date as string
   }
 
+  const saveLastWatered = async (plantId: number | null, season: "summer" | "winter", date: string | null, groupKey?: string) => {
+    const response = await fetch(plantId === null ? "/api/plants" : `/api/plants/${plantId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "setLastWatered", season, date, ...(groupKey ? { groupKey } : {}) }),
+    })
+    const result = await response.json()
+    if (!response.ok) throw new Error(result.error ?? "Could not save watering date.")
+    return result.date as string | null
+  }
+
   return (
     <main className="report-shell min-h-screen bg-[#0f1013] text-[#e7e9ed]">
       <CreatePlantDialog onCreated={(plant) => setPlantList((current) => [plant, ...current])} />
       <div className="mx-auto flex min-h-screen max-w-[1200px] flex-col bg-[#21242c] shadow-[0_0_80px_rgba(0,0,0,0.24)]">
         <header className="flex items-center justify-between border-b border-[#e0e6dd] px-5 py-4 sm:px-10 lg:px-14"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-[#315d42] text-[#e8f2e0]"><Droplets className="size-4" /></div><span className="font-heading text-lg font-semibold tracking-tight">verdant</span></div><div className="flex items-center gap-2"><span className="hidden text-xs text-[#78847a] sm:inline">Last measurement {lastUpdated}</span><Button variant="ghost" size="icon" aria-label="Sign in" className="text-[#55705a] hover:bg-[#eef3eb]"><LogIn className="size-4" /></Button></div></header>
         <section className="border-b border-[#e0e6dd] px-5 pb-10 pt-10 sm:px-10 lg:px-14 lg:pb-12 lg:pt-14"><div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="max-w-xl font-heading text-4xl font-semibold tracking-[-0.04em] text-[#1f3428] sm:text-5xl">A little care goes a long way.</h1><p className="mt-4 max-w-lg text-sm leading-6 text-[#78847a]">Keep an eye on the quiet signals. Your plants are telling you when it is time for a drink.</p></div><div className="flex shrink-0 gap-8 border-l border-[#d8dfd5] pl-6"><div><p className="text-3xl font-semibold tracking-tight text-[#315d42]">{plantList.length}</p><p className="mt-1 text-xs text-[#78847a]">plants tracked</p></div><div><p className="flex items-center gap-1 text-3xl font-semibold tracking-tight text-[#bd5b45]">{needsAttention}<ArrowDownRight className="size-5" /></p><p className="mt-1 text-xs text-[#78847a]">need attention</p></div></div></div></section>
-        <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7"><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a group to see its plants.</p></div><WateringSchedule plants={plantList} query={query} onQueryChange={setQuery} onGroupWatered={waterGroup} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
+        <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7"><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a group to see its plants.</p></div><WateringSchedule plants={plantList} groupDates={groupDates} query={query} onQueryChange={setQuery} onGroupWatered={waterGroup} onLastWateredChanged={saveLastWatered} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
           if (plant.id !== plantId) return plant
           if (season === "winter") return { ...plant, winterGroup: nextGroup, winterWateringInterval: wateringInterval }
           return { ...plant, group: nextGroup, wateringInterval, room: wateringInterval ? `Every ${wateringInterval} days` : "No schedule" }

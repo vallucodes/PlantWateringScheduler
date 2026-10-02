@@ -7,7 +7,7 @@ function parseWeight(value: unknown) {
 function winterGroupFor(group: { key: string; name: string; intervalDays: number | null }) {
   const intervalDays = group.intervalDays === null ? null : group.intervalDays * 2
   return {
-    key: `winter:${group.key}`,
+    key: intervalDays === null ? "winter:unassigned" : `winter:${intervalDays}`,
     name: intervalDays === null ? `Winter ${group.name}` : String(intervalDays),
     intervalDays,
   }
@@ -15,6 +15,40 @@ function winterGroupFor(group: { key: string; name: string; intervalDays: number
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
+
+  if (body?.action === "setLastWatered" && typeof body?.groupKey === "string") {
+    const season = body?.season === "winter" ? "winter" : "summer"
+    const groupKey = body.groupKey.trim()
+    const dateValue = body?.date === null ? null : typeof body?.date === "string" ? body.date : null
+    const date = dateValue === null ? null : new Date(`${dateValue}T00:00:00.000Z`)
+    if (dateValue !== null && (!date || !/^\d{4}-\d{2}-\d{2}$/.test(dateValue) || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== dateValue)) {
+      return Response.json({ error: "Date must be a valid calendar day." }, { status: 400 })
+    }
+    const expectedPrefix = season === "winter" ? "winter:" : ""
+    if ((season === "winter" && !groupKey.startsWith(expectedPrefix)) || (season === "summer" && groupKey.startsWith("winter:"))) {
+      return Response.json({ error: "Invalid watering group." }, { status: 400 })
+    }
+
+    const intervalValue = groupKey.replace(expectedPrefix, "")
+    const intervalDays = intervalValue === "unassigned" ? null : Number(intervalValue)
+    if (intervalDays !== null && (!Number.isInteger(intervalDays) || intervalDays < 1 || intervalDays > 365)) {
+      return Response.json({ error: "Invalid watering group." }, { status: 400 })
+    }
+
+    const group = await prisma.wateringGroup.upsert({
+      where: { key: groupKey },
+      update: { lastWateredAt: date },
+      create: {
+        key: groupKey,
+        name: intervalDays === null ? season === "winter" ? "Winter Unassigned" : "Unassigned" : String(intervalDays),
+        intervalDays,
+        lastWateredAt: date,
+      },
+      select: { lastWateredAt: true },
+    })
+    return Response.json({ date: group.lastWateredAt?.toISOString() ?? null })
+  }
+
   const name = typeof body?.name === "string" ? body.name.trim() : ""
   const minWeight = parseWeight(body?.minWeight)
   const maxWeight = parseWeight(body?.maxWeight)
