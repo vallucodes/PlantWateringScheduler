@@ -78,20 +78,60 @@ const scheduleGroups: ScheduleGroup[] = [
   { name: "Unassigned", lastWatered: null, intervalStart: null, intervalEnd: null },
 ]
 
-const groupColorPalette = [
-  { accent: "#ffffff", row: "rgba(124, 75, 153, 0.5)", border: "rgba(124, 75, 153, 0.8)" },
-  { accent: "#ffffff", row: "rgba(198, 91, 43, 0.5)", border: "rgba(198, 91, 43, 0.8)" },
-  { accent: "#ffffff", row: "rgba(219, 137, 21, 0.5)", border: "rgba(217, 149, 53, 0.8)" },
-  { accent: "#ffffff", row: "rgba(217, 191, 46, 0.5)", border: "rgba(217, 163, 46, 0.8)" },
-  { accent: "#ffffff", row: "rgba(113, 184, 129, 0.5)", border: "rgba(114, 168, 127, 0.8)" },
-  { accent: "#ffffff", row: "rgba(96, 122, 170, 0.5)", border: "rgba(111, 157, 120, 0.8)" },
-  { accent: "#ffffff", row: "rgba(102, 211, 219, 0.5)", border: "rgba(116, 167, 202, 0.8)" },
-  { accent: "#ffffff", row: "rgba(112, 124, 128, 0.5)", border: "rgba(142, 151, 165, 0.8)" },
-] as const
+type GroupColor = { accent: string; row: string; border: string }
 
-function colorForGroup(group: string) {
-  const groupIndex = scheduleGroups.findIndex((scheduleGroup) => scheduleGroup.name === group)
-  return groupColorPalette[groupIndex >= 0 ? groupIndex : groupColorPalette.length - 1]
+/** Highest → lowest interval: purple → red → orange → yellow → green → blue */
+const groupColorSpectrum: Array<[number, number, number]> = [
+  [124, 75, 153],
+  [196, 58, 74],
+  [198, 91, 43],
+  [217, 191, 46],
+  [113, 184, 129],
+  [96, 122, 170],
+]
+
+const unassignedGroupColor: GroupColor = {
+  accent: "#ffffff",
+  row: "rgba(112, 124, 128, 0.5)",
+  border: "rgba(142, 151, 165, 0.8)",
+}
+
+function mixRgb(start: [number, number, number], end: [number, number, number], t: number): [number, number, number] {
+  return [
+    Math.round(start[0] + (end[0] - start[0]) * t),
+    Math.round(start[1] + (end[1] - start[1]) * t),
+    Math.round(start[2] + (end[2] - start[2]) * t),
+  ]
+}
+
+function rgbAtSpectrum(t: number): [number, number, number] {
+  const clamped = Math.min(1, Math.max(0, t))
+  const lastIndex = groupColorSpectrum.length - 1
+  const scaled = clamped * lastIndex
+  const index = Math.min(lastIndex - 1, Math.floor(scaled))
+  const localT = scaled - index
+  return mixRgb(groupColorSpectrum[index], groupColorSpectrum[index + 1], localT)
+}
+
+function colorFromRgb(rgb: [number, number, number]): GroupColor {
+  const [r, g, b] = rgb
+  return {
+    accent: "#ffffff",
+    row: `rgba(${r}, ${g}, ${b}, 0.5)`,
+    border: `rgba(${r}, ${g}, ${b}, 0.8)`,
+  }
+}
+
+/** Colors by sorted position among assigned groups (highest first). Unassigned stays gray. */
+function colorForGroup(group: string, orderedGroupNames: string[]) {
+  if (group === "Unassigned") return unassignedGroupColor
+
+  const assigned = orderedGroupNames.filter((name) => name !== "Unassigned")
+  const index = assigned.indexOf(group)
+  if (index < 0 || assigned.length === 0) return unassignedGroupColor
+
+  const t = assigned.length === 1 ? 0 : index / (assigned.length - 1)
+  return colorFromRgb(rgbAtSpectrum(t))
 }
 
 function formatScheduleDate(date: Date) {
@@ -151,7 +191,7 @@ function NextWateringColumn({ children }: { children: React.ReactNode }) {
   )
 }
 
-function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEstimatedUpdated, onWeightAdded, onWeightRemoved, onGroupWatered }: { plants: Plant[]; query: string; onQueryChange: (query: string) => void; onPlantUpdated: (plantId: number, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: number, interval: number | null) => void; onWeightAdded: (plantId: number, date: string, weight: number) => void; onWeightRemoved: (plantId: number, date: string) => void; onGroupWatered: (plantId: number) => Promise<string> }) {
+function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEstimatedUpdated, onWeightAdded, onWeightRemoved, onGroupWatered }: { plants: Plant[]; query: string; onQueryChange: (query: string) => void; onPlantUpdated: (plantId: number, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: number, interval: number | null) => void; onWeightAdded: (plantId: number, date: string, weight: number) => void; onWeightRemoved: (plantId: number, date: string) => void; onGroupWatered: (plantId: number, season: "summer" | "winter") => Promise<string> }) {
   const [lastWateredDates, setLastWateredDates] = useState<Record<string, Date | null>>(
     () => Object.fromEntries(scheduleGroups.map((group) => [group.name, group.lastWatered ? parseScheduleDate(group.lastWatered) : null])),
   )
@@ -161,7 +201,6 @@ function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEsti
   const [season, setSeason] = useState<"summer" | "winter">("summer")
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [wateringGroup, setWateringGroup] = useState<string | null>(null)
-  const intervalMultiplier = season === "winter" ? 2 : 1
 
   const updateLastWatered = (groupName: string, date: Date | null) => {
     setLastWateredDates((current) => ({ ...current, [groupName]: date }))
@@ -171,8 +210,31 @@ function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEsti
     setPlantLastWateredDates((current) => ({ ...current, [plantId]: date }))
   }
 
-  const groups = [...scheduleGroups]
-  for (const plant of plants) {
+  const seasonPlants = plants.map((plant) => ({
+    ...plant,
+    group: season === "winter"
+      ? plant.winterWateringInterval === null ? "Unassigned" : plant.winterGroup
+      : plant.wateringInterval === null ? "Unassigned" : plant.group,
+    scheduleInterval: season === "winter" ? plant.winterWateringInterval : plant.wateringInterval,
+  }))
+  const groups = seasonPlants.reduce<ScheduleGroup[]>((current, plant) => {
+    const groupName = plant.group
+    if (!current.some((group) => group.name === groupName)) {
+      current.push({
+        name: groupName,
+        lastWatered: null,
+        intervalStart: plant.scheduleInterval,
+        intervalEnd: plant.scheduleInterval,
+      })
+    }
+    return current
+  }, [])
+  for (const group of scheduleGroups) {
+    if (!groups.some((currentGroup) => currentGroup.name === group.name) && season === "summer") {
+      groups.push(group)
+    }
+  }
+  for (const plant of seasonPlants) {
     if (!groups.some((group) => group.name === plant.group)) {
       groups.push({
         name: plant.group,
@@ -182,22 +244,29 @@ function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEsti
       })
     }
   }
+  groups.sort((firstGroup, secondGroup) => {
+    if (firstGroup.name === "Unassigned") return 1
+    if (secondGroup.name === "Unassigned") return -1
+    return Number(secondGroup.name) - Number(firstGroup.name)
+  })
 
   const rows = groups.map((group) => {
     const lastWateredDate = lastWateredDates[group.name]
     const nextWateringDates = lastWateredDate && group.intervalStart !== null && group.intervalEnd !== null
       ? group.intervalStart === group.intervalEnd
-        ? [addDays(lastWateredDate, group.intervalStart * intervalMultiplier)]
-        : [addDays(lastWateredDate, group.intervalStart * intervalMultiplier), addDays(lastWateredDate, group.intervalEnd * intervalMultiplier)]
+        ? [addDays(lastWateredDate, group.intervalStart)]
+        : [addDays(lastWateredDate, group.intervalStart), addDays(lastWateredDate, group.intervalEnd)]
       : []
 
     return {
       group: group.name,
       lastWatered: lastWateredDate,
       nextWateringDates,
-      plants: plants.filter((plant) => plant.group === group.name && plant.name.toLowerCase().includes(query.toLowerCase())),
+      plants: seasonPlants.filter((plant) => plant.group === group.name && plant.name.toLowerCase().includes(query.toLowerCase())),
     }
   })
+
+  const orderedGroupNames = groups.map((group) => group.name)
 
   return (
     <div className="mt-9 overflow-hidden border-y border-[#d8dfd5]">
@@ -227,7 +296,7 @@ function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEsti
         <NextWateringColumn>Next watering</NextWateringColumn>
       </div>
       {rows.map((row) => {
-        const groupColor = colorForGroup(row.group)
+        const groupColor = colorForGroup(row.group, orderedGroupNames)
         const isExpanded = query.trim().length > 0 || (expandedGroups[row.group] ?? false)
         return <div key={row.group} className="border-b last:border-b-0" style={{ borderColor: groupColor.border }}>
           <div
@@ -270,11 +339,11 @@ function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEsti
               size="sm"
               onClick={async (event) => {
                 event.stopPropagation()
-                const groupPlant = plants.find((plant) => plant.group === row.group)
+                const groupPlant = seasonPlants.find((plant) => plant.group === row.group)
                 if (!groupPlant) return
                 setWateringGroup(row.group)
                 try {
-                  const date = await onGroupWatered(groupPlant.id)
+                  const date = await onGroupWatered(groupPlant.id, season)
                   updateLastWatered(row.group, new Date(date))
                 } finally {
                   setWateringGroup(null)
@@ -305,7 +374,7 @@ function WateringSchedule({ plants, query, onQueryChange, onPlantUpdated, onEsti
             </NextWateringColumn>
           )}
           </div>
-          {isExpanded && row.plants.length > 0 ? <div>{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} lastWateredDate={plant.group === "Unassigned" ? plantLastWateredDates[plant.id] ?? null : null} onLastWateredUpdated={plant.group === "Unassigned" ? (date) => updatePlantLastWatered(plant.id, date) : undefined} onUpdated={(season, nextGroup, wateringInterval) => onPlantUpdated(plant.id, season, nextGroup, wateringInterval)} onEstimateUpdated={(interval) => onEstimatedUpdated(plant.id, interval)} onWeightAdded={(date, weight) => onWeightAdded(plant.id, date, weight)} onWeightRemoved={(date) => onWeightRemoved(plant.id, date)} />)}</div> : null}
+          {isExpanded && row.plants.length > 0 ? <div>{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} groupColor={groupColor} lastWateredDate={plant.group === "Unassigned" ? plantLastWateredDates[plant.id] ?? null : null} onLastWateredUpdated={plant.group === "Unassigned" ? (date) => updatePlantLastWatered(plant.id, date) : undefined} onUpdated={(season, nextGroup, wateringInterval) => onPlantUpdated(plant.id, season, nextGroup, wateringInterval)} onEstimateUpdated={(interval) => onEstimatedUpdated(plant.id, interval)} onWeightAdded={(date, weight) => onWeightAdded(plant.id, date, weight)} onWeightRemoved={(date) => onWeightRemoved(plant.id, date)} />)}</div> : null}
         </div>
       })}
       <div className="flex items-center justify-between gap-3 border-t border-[#d8dfd5] px-1 py-3">
@@ -541,7 +610,7 @@ function PlantScheduleEditor({ plant, onUpdated, onEstimateUpdated }: { plant: P
       const response = await fetch(`/api/plants/${plant.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ season, intervalDays }),
+        body: JSON.stringify(season === "winter" ? { winterIntervalDays: intervalDays } : { intervalDays }),
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error ?? "Could not update schedule.")
@@ -644,9 +713,8 @@ function PlantScheduleEditor({ plant, onUpdated, onEstimateUpdated }: { plant: P
   )
 }
 
-function PlantCard({ plant, lastWateredDate, onLastWateredUpdated, onUpdated, onEstimateUpdated, onWeightAdded, onWeightRemoved, onDeleted, onNameUpdated }: { plant: Plant; lastWateredDate: Date | null; onLastWateredUpdated?: (date: Date | null) => void; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightAdded: (date: string, weight: number) => void; onWeightRemoved: (date: string) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
+function PlantCard({ plant, groupColor, lastWateredDate, onLastWateredUpdated, onUpdated, onEstimateUpdated, onWeightAdded, onWeightRemoved, onDeleted, onNameUpdated }: { plant: Plant; groupColor: GroupColor; lastWateredDate: Date | null; onLastWateredUpdated?: (date: Date | null) => void; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightAdded: (date: string, weight: number) => void; onWeightRemoved: (date: string) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
   const { current, percentage } = getMoisture(plant)
-  const groupColor = colorForGroup(plant.group)
   const [weight, setWeight] = useState("")
   const [isSavingWeight, setIsSavingWeight] = useState(false)
   const [isRemovingWeight, setIsRemovingWeight] = useState(false)
@@ -855,11 +923,11 @@ export default function PlantDashboard({ plants, lastUpdated }: { plants: Plant[
     setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, history: plant.history.filter((entry) => entry.date !== dateLabel) } : plant))
   }
 
-  const waterGroup = async (plantId: number) => {
+  const waterGroup = async (plantId: number, season: "summer" | "winter") => {
     const response = await fetch(`/api/plants/${plantId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "water" }),
+      body: JSON.stringify({ action: "water", season }),
     })
     const result = await response.json()
     if (!response.ok) throw new Error(result.error ?? "Could not record watering.")

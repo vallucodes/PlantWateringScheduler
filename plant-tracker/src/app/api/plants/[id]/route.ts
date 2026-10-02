@@ -54,7 +54,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     data: { ...(hasName ? { name } : {}), wateringGroupId: wateringGroup.id, winterWateringGroupId: winterWateringGroup.id },
   })
 
-  return Response.json({ name: hasName ? name : plant.name, group: wateringGroup.name, wateringInterval: wateringGroup.intervalDays, winterWateringInterval: winterWateringGroup.intervalDays })
+  const selectedGroup = hasWinterInterval && !hasInterval ? winterWateringGroup : wateringGroup
+  return Response.json({ name: hasName ? name : plant.name, season: hasWinterInterval && !hasInterval ? "winter" : "summer", group: selectedGroup.name === "Winter Unassigned" ? "Unassigned" : selectedGroup.name, wateringInterval: selectedGroup.intervalDays, winterWateringInterval: winterWateringGroup.intervalDays })
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -64,14 +65,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const body = await request.json().catch(() => null)
 
   if (body?.action === "water") {
-    const plant = await prisma.plant.findUnique({ where: { id: plantId }, select: { wateringGroupId: true } })
+    const season = body?.season === "winter" ? "winter" : "summer"
+    const plant = await prisma.plant.findUnique({ where: { id: plantId }, select: { wateringGroupId: true, winterWateringGroupId: true } })
     if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
-    if (!plant.wateringGroupId) return Response.json({ error: "Plant has no watering group." }, { status: 400 })
+    const groupId = season === "winter" ? plant.winterWateringGroupId : plant.wateringGroupId
+    if (!groupId) return Response.json({ error: "Plant has no watering group." }, { status: 400 })
 
     const now = new Date()
     const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
     const groupPlants = await prisma.plant.findMany({
-      where: { wateringGroupId: plant.wateringGroupId },
+      where: season === "winter" ? { winterWateringGroupId: groupId } : { wateringGroupId: groupId },
       select: { id: true },
     })
 
