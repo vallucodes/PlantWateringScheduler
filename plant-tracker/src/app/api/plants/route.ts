@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { requireAdmin } from "@/lib/admin-auth"
 
 function parseWeight(value: unknown) {
   return value === "" || value === null || value === undefined ? null : Number(value)
@@ -14,6 +15,9 @@ function winterGroupFor(group: { key: string; name: string; intervalDays: number
 }
 
 export async function POST(request: Request) {
+  const unauthorizedResponse = await requireAdmin()
+  if (unauthorizedResponse) return unauthorizedResponse
+
   const body = await request.json().catch(() => null)
 
   if (body?.action === "setLastWatered" && typeof body?.groupKey === "string") {

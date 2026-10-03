@@ -1006,6 +1006,69 @@ function CreatePlantDialog({ onCreated }: { onCreated: (plant: Plant) => void })
   )
 }
 
+function AdminAccess() {
+  const [open, setOpen] = useState(false)
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const authenticate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError(null)
+    setIsSubmitting(true)
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error ?? "Could not sign in.")
+      setIsAuthenticated(true)
+      setPassword("")
+      setOpen(false)
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : "Could not sign in.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" })
+    setIsAuthenticated(false)
+  }
+
+  if (isAuthenticated) {
+    return <Button variant="ghost" size="icon" aria-label="Sign out" onClick={logout} className="text-[#55705a] hover:bg-[#eef3eb]"><LogIn className="size-4" /></Button>
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (!nextOpen) setError(null) }}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label="Sign in to edit plants" className="text-[#55705a] hover:bg-[#eef3eb]"><LogIn className="size-4" /></Button>
+      </DialogTrigger>
+      <DialogContent className="border-[#d8dfd5] bg-[#fbfcf8] sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-[#1f3428]">Admin sign in</DialogTitle>
+          <DialogDescription>Sign in to add plants, record measurements, and change schedules.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={authenticate} className="space-y-4">
+          <label className="block text-sm font-medium text-[#315d42]" htmlFor="admin-password">
+            Password
+            <Input id="admin-password" type="password" autoFocus required value={password} onChange={(event) => setPassword(event.target.value)} className="mt-1.5 border-[#cbdac8] bg-white" />
+          </label>
+          {error ? <p className="text-sm text-[#bd5b45]" role="alert">{error}</p> : null}
+          <div className="flex justify-end">
+            <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Signing in..." : "Sign in"}</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function PlantDashboard({ plants, groupDates, lastUpdated }: { plants: Plant[]; groupDates: PersistedGroupDate[]; lastUpdated: string }) {
   const [plantList, setPlantList] = useState(plants)
   const [query, setQuery] = useState("")
@@ -1054,7 +1117,7 @@ export default function PlantDashboard({ plants, groupDates, lastUpdated }: { pl
     <main className="report-shell min-h-screen bg-[#0f1013] text-[#e7e9ed]">
       <CreatePlantDialog onCreated={(plant) => setPlantList((current) => [plant, ...current])} />
       <div className="mx-auto flex min-h-screen max-w-[1200px] flex-col bg-[#21242c] shadow-[0_0_80px_rgba(0,0,0,0.24)]">
-        <header className="flex items-center justify-between border-b border-[#e0e6dd] px-5 py-4 sm:px-10 lg:px-14"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-[#315d42] text-[#e8f2e0]"><Droplets className="size-4" /></div><span className="font-heading text-lg font-semibold tracking-tight">verdant</span></div><div className="flex items-center gap-2"><span className="hidden text-xs text-[#78847a] sm:inline">Last measurement {lastUpdated}</span><Button variant="ghost" size="icon" aria-label="Sign in" className="text-[#55705a] hover:bg-[#eef3eb]"><LogIn className="size-4" /></Button></div></header>
+        <header className="flex items-center justify-between border-b border-[#e0e6dd] px-5 py-4 sm:px-10 lg:px-14"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-[#315d42] text-[#e8f2e0]"><Droplets className="size-4" /></div><span className="font-heading text-lg font-semibold tracking-tight">verdant</span></div><div className="flex items-center gap-2"><span className="hidden text-xs text-[#78847a] sm:inline">Last measurement {lastUpdated}</span><AdminAccess /></div></header>
         <section className="border-b border-[#e0e6dd] px-5 pb-10 pt-10 sm:px-10 lg:px-14 lg:pb-12 lg:pt-14"><div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="max-w-xl font-heading text-4xl font-semibold tracking-[-0.04em] text-[#1f3428] sm:text-5xl">A little care goes a long way.</h1><p className="mt-4 max-w-lg text-sm leading-6 text-[#78847a]">Keep an eye on the quiet signals. Your plants are telling you when it is time for a drink.</p></div><div className="flex shrink-0 gap-8 border-l border-[#d8dfd5] pl-6"><div><p className="text-3xl font-semibold tracking-tight text-[#315d42]">{plantList.length}</p><p className="mt-1 text-xs text-[#78847a]">plants tracked</p></div><div><p className="flex items-center gap-1 text-3xl font-semibold tracking-tight text-[#bd5b45]">{needsAttention}<ArrowDownRight className="size-5" /></p><p className="mt-1 text-xs text-[#78847a]">need attention</p></div></div></div></section>
         <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7"><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a group to see its plants.</p></div><WateringSchedule plants={plantList} groupDates={groupDates} query={query} onQueryChange={setQuery} onGroupWatered={waterGroup} onLastWateredChanged={saveLastWatered} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
           if (plant.id !== plantId) return plant

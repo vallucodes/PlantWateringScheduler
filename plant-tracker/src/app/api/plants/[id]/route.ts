@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma"
+import { requireAdmin } from "@/lib/admin-auth"
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const unauthorizedResponse = await requireAdmin()
+  if (unauthorizedResponse) return unauthorizedResponse
+
   const { id } = await params
   const plantId = Number(id)
   if (!Number.isInteger(plantId) || plantId < 0) return Response.json({ error: "Invalid plant ID." }, { status: 400 })
@@ -59,6 +63,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const unauthorizedResponse = await requireAdmin()
+  if (unauthorizedResponse) return unauthorizedResponse
+
   const { id } = await params
   const plantId = Number(id)
   if (!Number.isInteger(plantId) || plantId < 0) return Response.json({ error: "Invalid plant ID." }, { status: 400 })
@@ -144,6 +151,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const unauthorizedResponse = await requireAdmin()
+  if (unauthorizedResponse) return unauthorizedResponse
+
   const { id } = await params
   const plantId = Number(id)
   if (!Number.isInteger(plantId) || plantId < 0) return Response.json({ error: "Invalid plant ID." }, { status: 400 })

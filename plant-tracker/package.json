@@ -4,11 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate --schema ../prisma/schema.prisma && prisma migrate deploy --schema ../prisma/schema.prisma && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate --schema ../prisma/schema.prisma"
   },
   "dependencies": {
+    "@prisma/client": "6.12.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "dotenv": "^18.0.3",
@@ -29,6 +31,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
+    "prisma": "6.12.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
