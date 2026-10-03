@@ -189,6 +189,10 @@ function formatDaysAgo(dateLabel: string | undefined) {
   return `${daysAgo}d ago`
 }
 
+function latestMeasuredDate(history: Plant["history"]) {
+  return history.findLast((entry) => entry.weight !== null)?.date
+}
+
 function NextWateringColumn({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
@@ -910,7 +914,7 @@ function PlantCard({ plant, groupColor, lastWateredDate, onLastWateredUpdated, o
             <div className="shrink-0 whitespace-nowrap text-sm font-medium text-[#1f3428]">{nextWatering ? <><span>{formatScheduleDate(nextWatering)}</span> <strong className="font-bold text-[#315d42]">({daysFromToday(nextWatering) > 0 ? "+" : ""}{daysFromToday(nextWatering)} days)</strong></> : "Set an interval"}</div>
             <form onSubmit={saveWeight} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} className="flex w-20 shrink-0 items-center gap-1"><Input type="text" inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} onKeyDown={moveToWeightInput} data-weight-input aria-label={`Enter current weight for ${plant.name}`} placeholder="g" className="h-8 w-full border-white/50 bg-black/20 px-2 text-sm text-white placeholder:text-white/70" disabled={isSavingWeight} /><button type="submit" className="sr-only">Save weight</button>{weightError ? <span className="text-xs text-white" role="alert">{weightError}</span> : null}</form>
             <div className="flex shrink-0 items-center gap-0.5">
-              <div className="w-[6.5rem] shrink-0 text-left tabular-nums"><p className="whitespace-nowrap font-heading text-xl font-bold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-sm font-bold text-white">g</span></p><p className="whitespace-nowrap text-xs font-bold tracking-[0.08em] text-white">{formatDaysAgo(plant.history.at(-1)?.date)}</p></div>
+              <div className="w-[6.5rem] shrink-0 text-left tabular-nums"><p className="whitespace-nowrap font-heading text-xl font-bold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-sm font-bold text-white">g</span></p><p className="whitespace-nowrap text-xs font-bold tracking-[0.08em] text-white">{formatDaysAgo(latestMeasuredDate(plant.history))}</p></div>
               {plant.history.some((entry) => entry.weight !== null) ? <button type="button" aria-label={`Remove latest weight for ${plant.name}`} title="Remove latest weight" onClick={removeLatestWeight} onKeyDown={(event) => event.stopPropagation()} disabled={isRemovingWeight} className="flex size-6 shrink-0 items-center justify-center rounded-md text-[#aab4aa] transition-colors hover:bg-black/10 hover:text-[#bd5b45] disabled:opacity-50"><Trash2 className="size-3.5" /></button> : <span className="size-6 shrink-0" />}
             </div>
             <ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" />
@@ -922,7 +926,7 @@ function PlantCard({ plant, groupColor, lastWateredDate, onLastWateredUpdated, o
             <div className="min-h-px min-w-0 flex-1" />
             <form onSubmit={saveWeight} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} className="flex w-20 shrink-0 items-center gap-1"><Input type="text" inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} onKeyDown={moveToWeightInput} data-weight-input aria-label={`Enter current weight for ${plant.name}`} placeholder="g" className="h-8 w-full border-white/50 bg-black/20 px-2 text-sm text-white placeholder:text-white/70" disabled={isSavingWeight} /><button type="submit" className="sr-only">Save weight</button>{weightError ? <span className="text-xs text-white" role="alert">{weightError}</span> : null}</form>
             <div className="flex shrink-0 items-center gap-0.5">
-              <div className="w-[6.5rem] shrink-0 text-left tabular-nums"><p className="whitespace-nowrap font-heading text-xl font-bold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-sm font-bold text-white">g</span></p><p className="whitespace-nowrap text-xs font-bold tracking-[0.08em] text-white">{formatDaysAgo(plant.history.at(-1)?.date)}</p></div>
+              <div className="w-[6.5rem] shrink-0 text-left tabular-nums"><p className="whitespace-nowrap font-heading text-xl font-bold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-sm font-bold text-white">g</span></p><p className="whitespace-nowrap text-xs font-bold tracking-[0.08em] text-white">{formatDaysAgo(latestMeasuredDate(plant.history))}</p></div>
               {plant.history.some((entry) => entry.weight !== null) ? <button type="button" aria-label={`Remove latest weight for ${plant.name}`} title="Remove latest weight" onClick={removeLatestWeight} onKeyDown={(event) => event.stopPropagation()} disabled={isRemovingWeight} className="flex size-6 shrink-0 items-center justify-center rounded-md text-[#aab4aa] transition-colors hover:bg-black/10 hover:text-[#bd5b45] disabled:opacity-50"><Trash2 className="size-3.5" /></button> : <span className="size-6 shrink-0" />}
             </div>
             <ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" />

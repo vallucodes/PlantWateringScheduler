@@ -56,7 +56,7 @@ export default async function Home() {
         date: group.lastWateredAt?.toISOString() ?? null,
       }))}
       plants={plants.map((plant) => {
-        const latestWeight = plant.weightLogs.at(-1)?.weight ?? 0
+        const latestWeight = plant.weightLogs.findLast((log) => log.weight !== null)?.weight ?? 0
 
         return {
           id: plant.id,
