@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "db:import": "node scripts/import-workbook.cjs"
+    "db:import": "node scripts/import-workbook.cjs",
+    "db:migrate-data": "node scripts/migrate-sqlite-to-postgres.cjs"
   },
   "devDependencies": {
     "prisma": "^6.12.0"
