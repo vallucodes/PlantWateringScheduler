@@ -497,6 +497,17 @@ function getWeightAxis(dataMin: number, dataMax: number) {
   return { domain: [minimum, maximum] as [number, number], ticks }
 }
 
+function parseChartDate(value: string) {
+  return new Date(`${value}, ${new Date().getUTCFullYear()}`).getTime()
+}
+
+function formatChartDate(value: string | number) {
+  const date = new Date(typeof value === "number" ? value : parseChartDate(value))
+  const day = String(date.getUTCDate()).padStart(2, "0")
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0")
+  return `${day}.${month}`
+}
+
 function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeightAdded, onDeleted, onNameUpdated }: { plant: Plant; percentage: number; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightAdded: (date: string, weight: number) => void; onDeleted: () => void; onNameUpdated: (name: string) => void }) {
   const [range, setRange] = useState({ startIndex: 0, endIndex: Math.max(0, plant.history.length - 1) })
   const [selectionStart, setSelectionStart] = useState<number | null>(null)
@@ -512,6 +523,8 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeigh
   const dataMin = Math.min(plant.minWeight, ...visibleWeights)
   const dataMax = Math.max(plant.maxWeight, ...visibleWeights)
   const weightAxis = getWeightAxis(dataMin, dataMax)
+  const chartData = visibleHistory.map((entry) => ({ ...entry, chartDate: parseChartDate(entry.date) }))
+  const monthlyTicks = chartData.filter((entry) => new Date(entry.chartDate).getUTCDate() === 1).map((entry) => entry.chartDate)
   const selectedStart = selectionStart !== null && selectionEnd !== null ? Math.min(selectionStart, selectionEnd) : range.startIndex
   const selectedEnd = selectionStart !== null && selectionEnd !== null ? Math.max(selectionStart, selectionEnd) : range.endIndex
   const selectedDates = plant.history.length > 0 ? `${plant.history[selectedStart].date} - ${plant.history[selectedEnd].date}` : "No dates"
@@ -540,6 +553,11 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeigh
     if (selectionStart !== null && selectionEnd !== null && selectionStart !== selectionEnd) {
       setRange({ startIndex: Math.min(selectionStart, selectionEnd), endIndex: Math.max(selectionStart, selectionEnd) })
     }
+    setSelectionStart(null)
+    setSelectionEnd(null)
+  }
+
+  const handleChartMouseLeave = () => {
     setSelectionStart(null)
     setSelectionEnd(null)
   }
@@ -621,12 +639,12 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeigh
           </button>
         </div>
         <ChartContainer config={{ weight: { label: "Weight", color: "#467555" } }} className="h-[260px] w-full">
-          <LineChart data={visibleHistory} margin={{ top: 10, right: 12, left: 0, bottom: 0 }} onMouseDown={handleChartMouseDown} onMouseMove={handleChartMouseMove} onMouseUp={handleChartMouseUp} onMouseLeave={handleChartMouseUp}>
+          <LineChart data={chartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }} onMouseDown={handleChartMouseDown} onMouseMove={handleChartMouseMove} onMouseUp={handleChartMouseUp} onMouseLeave={handleChartMouseLeave}>
             <CartesianGrid vertical={false} stroke="#e2e8df" />
-            <XAxis dataKey="date" axisLine={false} tickLine={false} tickMargin={10} />
+            <XAxis dataKey="chartDate" type="number" domain={["dataMin", "dataMax"]} ticks={monthlyTicks} interval={0} axisLine={false} tickLine={false} tickMargin={10} tickFormatter={formatChartDate} />
             <YAxis domain={weightAxis.domain} ticks={weightAxis.ticks} axisLine={false} tickLine={false} tickMargin={8} />
-            <Tooltip contentStyle={{ borderRadius: 8, borderColor: "#d8dfd5", backgroundColor: "#fbfcf8" }} formatter={(value) => [`${value}g`, "Weight"]} />
-            {selectedStart !== selectedEnd && <ReferenceArea x1={plant.history[selectedStart].date} x2={plant.history[selectedEnd].date} fill="#9fbaa0" fillOpacity={0.28} stroke="#467555" strokeOpacity={0.6} />}
+            <Tooltip shared={false} contentStyle={{ borderRadius: 8, borderColor: "#d8dfd5", backgroundColor: "#fbfcf8", color: "#1f3428" }} labelStyle={{ color: "#1f3428" }} labelFormatter={(value) => formatChartDate(value as number)} formatter={(value) => [`${value}g`, "Weight"]} />
+            {selectedStart !== selectedEnd && <ReferenceArea x1={parseChartDate(plant.history[selectedStart].date)} x2={parseChartDate(plant.history[selectedEnd].date)} fill="#9fbaa0" fillOpacity={0.28} stroke="#467555" strokeOpacity={0.6} />}
             <ReferenceLine y={plant.minWeight} stroke="#cf7459" strokeDasharray="4 4" label={{ value: "dry", position: "insideTopRight", fill: "#bd5b45", fontSize: 11 }} />
             <ReferenceLine y={plant.maxWeight} stroke="#6f9d78" strokeDasharray="4 4" label={{ value: "full", position: "insideBottomRight", fill: "#467555", fontSize: 11 }} />
             <Line type="monotone" dataKey="weight" connectNulls={false} isAnimationActive={false} stroke="#467555" strokeWidth={3} dot={{ fill: "#fbfcf8", stroke: "#467555", strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} />
