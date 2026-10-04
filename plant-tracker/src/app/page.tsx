@@ -29,19 +29,23 @@ function buildHistory(weightLogs: { date: Date; weight: number | null }[]) {
 }
 
 export default async function Home() {
-  const plants = await prisma.plant.findMany({
-    include: {
-      wateringGroup: true,
-      winterWateringGroup: true,
-      weightLogs: {
-        orderBy: { date: "asc" },
+  const [plants, wateringGroups, appSetting] = await Promise.all([
+    prisma.plant.findMany({
+      include: {
+        wateringGroup: true,
+        winterWateringGroup: true,
+        weightLogs: {
+          orderBy: { date: "asc" },
+        },
       },
-    },
-    orderBy: { sourceRow: "asc" },
-  })
-  const wateringGroups = await prisma.wateringGroup.findMany({
-    select: { key: true, name: true, lastWateredAt: true },
-  })
+      orderBy: { sourceRow: "asc" },
+    }),
+    prisma.wateringGroup.findMany({
+      select: { key: true, name: true, lastWateredAt: true },
+    }),
+    prisma.appSetting.findUnique({ where: { key: "season" } }),
+  ])
+  const initialSeason = (appSetting?.value === "winter" ? "winter" : "summer") as "summer" | "winter"
   const latestLogDate = plants
     .flatMap((plant) => plant.weightLogs.map((log) => log.date))
     .sort((firstDate, secondDate) => secondDate.getTime() - firstDate.getTime())[0]
@@ -49,6 +53,7 @@ export default async function Home() {
 
   return (
     <PlantDashboard
+      initialSeason={initialSeason}
       lastUpdated={latestLogDate}
       groupDates={wateringGroups.map((group) => ({
         season: group.key.startsWith("winter:") ? "winter" as const : "summer" as const,

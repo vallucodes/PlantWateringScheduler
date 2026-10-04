@@ -242,7 +242,7 @@ function MondayCalendar({ value, onChange, disabled }: { value: string; onChange
   )
 }
 
-function WateringSchedule({ plants, groupDates, query, onQueryChange, onPlantUpdated, onEstimatedUpdated, onWeightAdded, onWeightRemoved, onGroupWatered, onLastWateredChanged }: { plants: Plant[]; groupDates: PersistedGroupDate[]; query: string; onQueryChange: (query: string) => void; onPlantUpdated: (plantId: number, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: number, interval: number | null) => void; onWeightAdded: (plantId: number, date: string, weight: number) => void; onWeightRemoved: (plantId: number, date: string) => void; onGroupWatered: (plantId: number, season: "summer" | "winter") => Promise<string>; onLastWateredChanged: (plantId: number | null, season: "summer" | "winter", date: string | null, groupKey?: string) => Promise<string | null> }) {
+function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryChange, onPlantUpdated, onEstimatedUpdated, onWeightAdded, onWeightRemoved, onGroupWatered, onLastWateredChanged, onSeasonChanged }: { plants: Plant[]; groupDates: PersistedGroupDate[]; query: string; initialSeason: "summer" | "winter"; onQueryChange: (query: string) => void; onPlantUpdated: (plantId: number, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: number, interval: number | null) => void; onWeightAdded: (plantId: number, date: string, weight: number) => void; onWeightRemoved: (plantId: number, date: string) => void; onGroupWatered: (plantId: number, season: "summer" | "winter") => Promise<string>; onLastWateredChanged: (plantId: number | null, season: "summer" | "winter", date: string | null, groupKey?: string) => Promise<string | null>; onSeasonChanged: (season: "summer" | "winter") => void }) {
   const [lastWateredDates, setLastWateredDates] = useState<Record<string, Date | null>>(
     () => Object.fromEntries([
       ...scheduleGroups.map((group) => [wateringDateKey("summer", group.name), null]),
@@ -257,7 +257,7 @@ function WateringSchedule({ plants, groupDates, query, onQueryChange, onPlantUpd
       ...plants.filter((plant) => plant.winterWateringInterval === null).map((plant) => [plantWateringDateKey("winter", plant.id), plant.winterLastWatered ? new Date(plant.winterLastWatered) : null]),
     ]),
   )
-  const [season, setSeason] = useState<"summer" | "winter">("summer")
+  const [season, setSeason] = useState<"summer" | "winter">(initialSeason)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [wateringGroup, setWateringGroup] = useState<string | null>(null)
 
@@ -448,7 +448,11 @@ function WateringSchedule({ plants, groupDates, query, onQueryChange, onPlantUpd
           type="button"
           role="switch"
           aria-checked={season === "winter"}
-          onClick={() => setSeason((current) => current === "summer" ? "winter" : "summer")}
+          onClick={() => {
+            const nextSeason = season === "summer" ? "winter" : "summer"
+            setSeason(nextSeason)
+            onSeasonChanged(nextSeason)
+          }}
           className="flex items-center gap-2 rounded-md border border-[#d8dfd5] px-2.5 py-1.5 text-xs font-medium text-[#55705a] transition-colors hover:bg-[#eef3eb]"
         >
           {season === "summer" ? <SunMedium className="size-3.5" /> : <Snowflake className="size-3.5" />}
@@ -1073,7 +1077,9 @@ function AdminAccess() {
   )
 }
 
-export default function PlantDashboard({ plants, groupDates, lastUpdated }: { plants: Plant[]; groupDates: PersistedGroupDate[]; lastUpdated: string }) {
+import { setSeasonSetting } from "@/app/actions"
+
+export default function PlantDashboard({ plants, groupDates, lastUpdated, initialSeason }: { plants: Plant[]; groupDates: PersistedGroupDate[]; lastUpdated: string; initialSeason: "summer" | "winter" }) {
   const [plantList, setPlantList] = useState(plants)
   const [query, setQuery] = useState("")
   const needsAttention = plantList.filter((plant) => getMoisture(plant).percentage < 50).length
@@ -1123,7 +1129,7 @@ export default function PlantDashboard({ plants, groupDates, lastUpdated }: { pl
       <div className="mx-auto flex min-h-screen max-w-[1200px] flex-col bg-[#21242c] shadow-[0_0_80px_rgba(0,0,0,0.24)]">
         <header className="flex items-center justify-between border-b border-[#e0e6dd] px-5 py-4 sm:px-10 lg:px-14"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-[#315d42] text-[#e8f2e0]"><Droplets className="size-4" /></div><span className="font-heading text-lg font-semibold tracking-tight">verdant</span></div><div className="flex items-center gap-2"><span className="hidden text-xs text-[#78847a] sm:inline">Last measurement {lastUpdated}</span><AdminAccess /></div></header>
         <section className="border-b border-[#e0e6dd] px-5 pb-10 pt-10 sm:px-10 lg:px-14 lg:pb-12 lg:pt-14"><div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="max-w-xl font-heading text-4xl font-semibold tracking-[-0.04em] text-[#1f3428] sm:text-5xl">A little care goes a long way.</h1><p className="mt-4 max-w-lg text-sm leading-6 text-[#78847a]">Keep an eye on the quiet signals. Your plants are telling you when it is time for a drink.</p></div><div className="flex shrink-0 gap-8 border-l border-[#d8dfd5] pl-6"><div><p className="text-3xl font-semibold tracking-tight text-[#315d42]">{plantList.length}</p><p className="mt-1 text-xs text-[#78847a]">plants tracked</p></div><div><p className="flex items-center gap-1 text-3xl font-semibold tracking-tight text-[#bd5b45]">{needsAttention}<ArrowDownRight className="size-5" /></p><p className="mt-1 text-xs text-[#78847a]">need attention</p></div></div></div></section>
-        <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7"><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a group to see its plants.</p></div><WateringSchedule plants={plantList} groupDates={groupDates} query={query} onQueryChange={setQuery} onGroupWatered={waterGroup} onLastWateredChanged={saveLastWatered} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
+        <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7"><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a group to see its plants.</p></div><WateringSchedule plants={plantList} groupDates={groupDates} query={query} initialSeason={initialSeason} onQueryChange={setQuery} onSeasonChanged={setSeasonSetting} onGroupWatered={waterGroup} onLastWateredChanged={saveLastWatered} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
           if (plant.id !== plantId) return plant
           if (season === "winter") return { ...plant, winterGroup: nextGroup, winterWateringInterval: wateringInterval }
           return { ...plant, group: nextGroup, wateringInterval, room: wateringInterval ? `Every ${wateringInterval} days` : "No schedule" }

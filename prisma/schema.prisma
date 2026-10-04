@@ -51,3 +51,10 @@ model WeightLog {
   @@unique([plantId, date])
   @@index([date])
 }
+
+model AppSetting {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
