@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -207,15 +207,27 @@ function NextWateringColumn({ children }: { children: React.ReactNode }) {
   )
 }
 
-function MondayCalendar({ value, onChange, disabled }: { value: string; onChange: (value: string) => void; disabled?: boolean }) {
+function MondayCalendar({ value, onChange, disabled, compact = false, ariaLabel = "Choose measurement date" }: { value: string | null; onChange: (value: string | null) => void; disabled?: boolean; compact?: boolean; ariaLabel?: string }) {
   const [open, setOpen] = useState(false)
-  const selectedDate = new Date(`${value}T00:00:00.000Z`)
+  const calendarRef = useRef<HTMLDivElement>(null)
+  const selectedDate = value ? new Date(`${value}T00:00:00.000Z`) : new Date()
   const [visibleMonth, setVisibleMonth] = useState(() => new Date(Date.UTC(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth(), 1)))
   const firstWeekday = (visibleMonth.getUTCDay() + 6) % 7
   const daysInMonth = new Date(Date.UTC(visibleMonth.getUTCFullYear(), visibleMonth.getUTCMonth() + 1, 0)).getUTCDate()
   const days = Array.from({ length: firstWeekday + daysInMonth }, (_, index) => index < firstWeekday ? null : index - firstWeekday + 1)
   const monthLabel = visibleMonth.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })
-  const selectedDateLabel = selectedDate.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" })
+  const selectedDateLabel = value ? selectedDate.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" }) : "Not recorded"
+  const today = new Date()
+  const todayValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
+
+  useEffect(() => {
+    if (!open) return
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!calendarRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener("pointerdown", closeOnOutsidePointer)
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer)
+  }, [open])
 
   const selectDay = (day: number) => {
     const selected = new Date(Date.UTC(visibleMonth.getUTCFullYear(), visibleMonth.getUTCMonth(), day))
@@ -224,19 +236,31 @@ function MondayCalendar({ value, onChange, disabled }: { value: string; onChange
   }
 
   return (
-    <div className="relative">
-      <Button type="button" variant="outline" size="sm" aria-label="Choose measurement date" title="Choose measurement date" onClick={() => setOpen((current) => !current)} disabled={disabled} className="h-8 border-[#cbdac8] px-2 text-[#55705a] hover:bg-[#eef3eb]">
+    <div ref={calendarRef} className="relative">
+      <Button type="button" variant={compact ? "ghost" : "outline"} size="sm" aria-label={ariaLabel} title={ariaLabel} onClick={(event) => { event.stopPropagation(); setOpen((current) => !current) }} disabled={disabled} className={compact ? "size-6 border-transparent bg-transparent p-0 text-[#55705a] hover:bg-transparent" : "h-8 border-[#cbdac8] px-2 text-[#55705a] hover:bg-[#eef3eb]"}>
         <CalendarDays className="size-3.5" />
-        <span>{selectedDateLabel}</span>
+        {!compact ? <span>{selectedDateLabel}</span> : null}
       </Button>
-      {open ? <div className="absolute bottom-10 left-0 z-20 w-64 rounded-md border border-[#d8dfd5] bg-[#fbfcf8] p-3 shadow-lg">
+      {open ? <div onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} className="absolute bottom-10 left-0 z-50 w-64 cursor-default rounded-md border border-[#d8dfd5] bg-[#fbfcf8] p-3 shadow-lg">
         <div className="mb-2 flex items-center justify-between text-sm font-medium text-[#315d42]">
-          <button type="button" aria-label="Previous month" onClick={() => setVisibleMonth((current) => new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() - 1, 1)))} className="rounded p-1 hover:bg-[#eef3eb]"><ChevronLeft className="size-4" /></button>
+          <button type="button" aria-label="Previous month" onClick={() => setVisibleMonth((current) => new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() - 1, 1)))} className="cursor-pointer rounded p-1 transition-colors hover:bg-[#303a34] hover:text-white"><ChevronLeft className="size-4" /></button>
           <span>{monthLabel}</span>
-          <button type="button" aria-label="Next month" onClick={() => setVisibleMonth((current) => new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1)))} className="rounded p-1 hover:bg-[#eef3eb]"><ChevronRight className="size-4" /></button>
+          <button type="button" aria-label="Next month" onClick={() => setVisibleMonth((current) => new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1)))} className="cursor-pointer rounded p-1 transition-colors hover:bg-[#303a34] hover:text-white"><ChevronRight className="size-4" /></button>
         </div>
         <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold text-[#889488]">{["M", "T", "W", "T", "F", "S", "S"].map((day, index) => <span key={`${day}-${index}`}>{day}</span>)}</div>
-        <div className="mt-1 grid grid-cols-7 gap-1 text-center text-xs">{days.map((day, index) => day === null ? <span key={`empty-${index}`} /> : <button key={day} type="button" onClick={() => selectDay(day)} className={`rounded p-1.5 text-[#315d42] hover:bg-[#dfe9d7] ${value === new Date(Date.UTC(visibleMonth.getUTCFullYear(), visibleMonth.getUTCMonth(), day)).toISOString().slice(0, 10) ? "bg-[#315d42] text-white hover:bg-[#315d42]" : ""}`}>{day}</button>)}</div>
+        <div className="mt-1 grid grid-cols-7 gap-1 text-center text-xs">{days.map((day, index) => {
+          if (day === null) return <span key={`empty-${index}`} className="cursor-default" />
+          const dateValue = new Date(Date.UTC(visibleMonth.getUTCFullYear(), visibleMonth.getUTCMonth(), day)).toISOString().slice(0, 10)
+          const isSelected = value === dateValue
+          const isToday = todayValue === dateValue
+          const dayStateClass = isSelected
+              ? "bg-[#315d42] text-white hover:bg-[#162c1d] hover:text-white"
+            : isToday
+              ? "bg-[#39483d] font-bold text-white ring-2 ring-[#526957] hover:bg-[#4c5e4d] hover:text-white"
+              : "hover:bg-[#303a34] hover:text-white"
+          return <button key={dateValue} type="button" onClick={() => selectDay(day)} className={`cursor-pointer rounded p-1.5 text-[#315d42] transition-colors ${dayStateClass}`}>{day}</button>
+        })}</div>
+        {value ? <button type="button" onClick={() => { onChange(null); setOpen(false) }} className="mt-2 w-full cursor-pointer rounded p-1 text-xs text-[#78847a] transition-colors hover:bg-[#303a34] hover:text-white">Clear date</button> : null}
       </div> : null}
     </div>
   )
@@ -328,7 +352,7 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
   const orderedGroupNames = groups.map((group) => group.name)
 
   return (
-    <div className="mt-9 overflow-hidden border-y border-[#d8dfd5]">
+    <div className="mt-9 overflow-visible border-y border-[#d8dfd5]">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e0e6dd] px-1 py-2">
         <div className="flex items-center gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedGroups(Object.fromEntries(groups.map((group) => [group.name, true])))} className="h-8 gap-1.5 px-2 text-xs text-[#55705a] hover:bg-[#eef3eb]">
@@ -378,24 +402,18 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
           <div className="flex min-w-0 items-center gap-2">
             {row.group !== "Unassigned" ? <>
             <div className="flex w-[5.25rem] shrink-0 items-center gap-1.5">
-              <span className="relative inline-flex size-5 shrink-0 items-center justify-center text-[#55705a]" title={`Set last watered date for ${row.group}`}>
-                <CalendarDays className="size-4" aria-hidden="true" />
-                <input
-                  type="date"
-                  value={dateInputValue(lastWateredDates[wateringDateKey(season, row.group)])}
-                  onChange={async (event) => {
-                    const date = parseInputDate(event.target.value)
-                    const groupPlant = seasonPlants.find((plant) => plant.group === row.group)
-                    const groupKey = row.group === "Unassigned" ? "unassigned" : row.group
-                    const savedDate = await onLastWateredChanged(groupPlant?.id ?? null, season, date ? date.toISOString().slice(0, 10) : null, groupPlant ? undefined : groupKey)
-                    updateLastWatered(season, row.group, savedDate ? new Date(savedDate) : null)
-                  }}
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  aria-label={`Set last watered date for ${row.group}`}
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                />
-              </span>
+              <MondayCalendar
+                value={dateInputValue(lastWateredDates[wateringDateKey(season, row.group)]) || null}
+                onChange={async (value) => {
+                  const date = value ? parseInputDate(value) : null
+                  const groupPlant = seasonPlants.find((plant) => plant.group === row.group)
+                  const groupKey = row.group === "Unassigned" ? "unassigned" : row.group
+                  const savedDate = await onLastWateredChanged(groupPlant?.id ?? null, season, date ? date.toISOString().slice(0, 10) : null, groupPlant ? undefined : groupKey)
+                  updateLastWatered(season, row.group, savedDate ? new Date(savedDate) : null)
+                }}
+                compact
+                ariaLabel={`Set last watered date for ${row.group}`}
+              />
               <span className="font-bold tabular-nums text-white">{row.lastWatered ? formatScheduleDate(lastWateredDates[wateringDateKey(season, row.group)] as Date) : "Not recorded"}</span>
             </div>
             <Button
@@ -617,7 +635,7 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeigh
         <form onSubmit={saveMeasurement} className="mt-5 flex flex-wrap items-end justify-start gap-2 border-t border-[#e4e9e1] pt-4">
           <label className="block text-sm font-medium text-[#315d42]" htmlFor={`measurement-date-${plant.id}`}>
             <span className="sr-only">Date</span>
-            <MondayCalendar value={measurementDate} onChange={setMeasurementDate} disabled={isSavingMeasurement} />
+            <MondayCalendar value={measurementDate} onChange={(value) => { if (value) setMeasurementDate(value) }} disabled={isSavingMeasurement} />
           </label>
           <label className="block w-full text-sm font-medium text-[#315d42] sm:w-28" htmlFor={`measurement-weight-${plant.id}`}>
             <span className="sr-only">Weight (g)</span>
@@ -906,10 +924,7 @@ function PlantCard({ plant, groupColor, lastWateredDate, onLastWateredUpdated, o
           {plant.group === "Unassigned" ? <div className="col-span-2 flex min-w-0 items-center gap-3">
             <div className="flex shrink-0 items-center gap-2 text-sm">
               <div className="flex w-[5.25rem] shrink-0 items-center gap-1.5">
-                <span className="relative inline-flex size-5 shrink-0 items-center justify-center text-[#55705a]" title={`Set last watered date for ${plant.name}`}>
-                  <CalendarDays className="size-3.5" aria-hidden="true" />
-                  <input type="date" lang="en-GB" value={dateInputValue(lastWateredDate)} onChange={async (event) => { const date = parseInputDate(event.target.value); await onLastWateredUpdated?.(date) }} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} aria-label={`Set last watered date for ${plant.name}`} className="absolute inset-0 cursor-pointer opacity-0" />
-                </span>
+                <MondayCalendar value={dateInputValue(lastWateredDate) || null} onChange={async (value) => { await onLastWateredUpdated?.(value ? parseInputDate(value) : null) }} compact ariaLabel={`Set last watered date for ${plant.name}`} />
                 <span className="font-bold tabular-nums text-white">{lastWateredDate ? formatScheduleDate(lastWateredDate) : "Not recorded"}</span>
               </div>
               <Button type="button" variant="outline" size="sm" onClick={async (event) => { event.stopPropagation(); await onLastWateredUpdated?.(new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()))) }} onKeyDown={(event) => event.stopPropagation()} className="h-7 shrink-0 border-[#cbdac8] px-2 text-xs text-[#315d42] hover:bg-[#eef3eb]">Water now</Button>
