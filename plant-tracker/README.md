@@ -1,6 +1,6 @@
 ## Deployment configuration
 
-Set a PostgreSQL `DATABASE_URL` and a long, unique `ADMIN_PASSWORD` in the deployment environment. The first deployment applies the migration in `../prisma/migrations`. The dashboard remains publicly readable, but every API request that creates, edits, waters, records weight, or deletes plant data requires the admin password. Login is blocked for 15 minutes after 3 failed attempts from the same IP address. Never commit the real `.env` file.
+Set a pooled PostgreSQL `DATABASE_URL`, the corresponding direct PostgreSQL `DIRECT_URL`, and a long, unique `ADMIN_PASSWORD` in the deployment environment. `DATABASE_URL` is used by the application; `DIRECT_URL` is used by Prisma migrations because migration advisory locks require a direct session connection. The first deployment applies the migration in `../prisma/migrations`. The dashboard remains publicly readable, but every API request that creates, edits, waters, records weight, or deletes plant data requires the admin password. Login is blocked for 15 minutes after 3 failed attempts from the same IP address. Never commit the real `.env` file.
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
