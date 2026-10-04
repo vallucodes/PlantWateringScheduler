@@ -27,7 +27,6 @@ import {
   CartesianGrid,
   Line,
   LineChart,
-  ReferenceArea,
   ReferenceLine,
   Tooltip,
   XAxis,
@@ -512,6 +511,8 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeigh
   const [range, setRange] = useState({ startIndex: 0, endIndex: Math.max(0, plant.history.length - 1) })
   const [selectionStart, setSelectionStart] = useState<number | null>(null)
   const [selectionEnd, setSelectionEnd] = useState<number | null>(null)
+  const [measurementStartIndex, setMeasurementStartIndex] = useState<number | null>(null)
+  const [measurementEndIndex, setMeasurementEndIndex] = useState<number | null>(null)
   const [measurementDate, setMeasurementDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [measurementWeight, setMeasurementWeight] = useState("")
   const [measurementError, setMeasurementError] = useState<string | null>(null)
@@ -528,6 +529,9 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeigh
   const selectedStart = selectionStart !== null && selectionEnd !== null ? Math.min(selectionStart, selectionEnd) : range.startIndex
   const selectedEnd = selectionStart !== null && selectionEnd !== null ? Math.max(selectionStart, selectionEnd) : range.endIndex
   const selectedDates = plant.history.length > 0 ? `${plant.history[selectedStart].date} - ${plant.history[selectedEnd].date}` : "No dates"
+  const measurementDays = measurementStartIndex !== null && measurementEndIndex !== null
+    ? Math.round(Math.abs(parseChartDate(plant.history[measurementEndIndex].date) - parseChartDate(plant.history[measurementStartIndex].date)) / 86400000)
+    : null
 
   const indexFromChartEvent = (event: { activeTooltipIndex?: number | string | null } | undefined) => {
     if (event?.activeTooltipIndex === undefined || event.activeTooltipIndex === null) return null
@@ -550,6 +554,14 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeigh
   }
 
   const handleChartMouseUp = () => {
+    if (selectionStart !== null && selectionEnd === selectionStart) {
+      if (measurementStartIndex === null || measurementEndIndex !== null) {
+        setMeasurementStartIndex(selectionStart)
+        setMeasurementEndIndex(null)
+      } else {
+        setMeasurementEndIndex(selectionStart)
+      }
+    }
     if (selectionStart !== null && selectionEnd !== null && selectionStart !== selectionEnd) {
       setRange({ startIndex: Math.min(selectionStart, selectionEnd), endIndex: Math.max(selectionStart, selectionEnd) })
     }
@@ -629,22 +641,26 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeigh
           <div className="rounded-md bg-[#f0f4ed] px-2 py-3"><p className="text-[10px] uppercase tracking-[0.12em] text-[#889488]">Dry line</p><p className="mt-1 font-semibold text-[#bd5b45]">{plant.minWeight}g</p></div>
           <div className="rounded-md bg-[#f0f4ed] px-2 py-3"><p className="text-[10px] uppercase tracking-[0.12em] text-[#889488]">Range left</p><p className="mt-1 font-semibold text-[#a4772b]">{percentage}%</p></div>
         </div>
-        <div className="mb-2 flex items-center justify-between">
+        <div className="relative mb-2 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.12em] text-[#889488]">History window</p>
-            <p className="mt-1 text-xs text-[#78847a]">{selectedDates}</p>
+            <div className="mt-1 flex items-center gap-3 text-xs">
+              <p className="text-[#78847a]">{selectedDates}</p>
+            </div>
           </div>
+          {measurementDays !== null ? <p className="absolute left-1/2 -translate-x-1/2 text-sm font-semibold text-[#315d42]">{measurementDays} days</p> : null}
           <button type="button" onClick={resetRange} aria-label="Show full weight history" className="rounded-md p-1.5 text-[#78847a] transition-colors hover:bg-[#eef3eb] hover:text-[#315d42]">
             <RotateCcw className="size-3.5" />
           </button>
         </div>
         <ChartContainer config={{ weight: { label: "Weight", color: "#467555" } }} className="h-[260px] w-full">
-          <LineChart data={chartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }} onMouseDown={handleChartMouseDown} onMouseMove={handleChartMouseMove} onMouseUp={handleChartMouseUp} onMouseLeave={handleChartMouseLeave}>
+          <LineChart data={chartData} margin={{ top: 16, right: 12, left: 0, bottom: 0 }} onMouseDown={handleChartMouseDown} onMouseMove={handleChartMouseMove} onMouseUp={handleChartMouseUp} onMouseLeave={handleChartMouseLeave}>
             <CartesianGrid vertical={false} stroke="#e2e8df" />
             <XAxis dataKey="chartDate" type="number" domain={["dataMin", "dataMax"]} ticks={monthlyTicks} interval={0} axisLine={false} tickLine={false} tickMargin={10} tickFormatter={formatChartDate} />
             <YAxis domain={weightAxis.domain} ticks={weightAxis.ticks} axisLine={false} tickLine={false} tickMargin={8} />
             <Tooltip shared={false} contentStyle={{ borderRadius: 8, borderColor: "#d8dfd5", backgroundColor: "#fbfcf8", color: "#1f3428" }} labelStyle={{ color: "#1f3428" }} labelFormatter={(value) => formatChartDate(value as number)} formatter={(value) => [`${value}g`, "Weight"]} />
-            {selectedStart !== selectedEnd && <ReferenceArea x1={parseChartDate(plant.history[selectedStart].date)} x2={parseChartDate(plant.history[selectedEnd].date)} fill="#9fbaa0" fillOpacity={0.28} stroke="#467555" strokeOpacity={0.6} />}
+            {measurementStartIndex !== null && measurementStartIndex >= range.startIndex && measurementStartIndex <= range.endIndex ? <ReferenceLine x={chartData[measurementStartIndex - range.startIndex].chartDate} stroke="#bd5b45" strokeWidth={2} label={{ value: formatChartDate(chartData[measurementStartIndex - range.startIndex].chartDate), position: "top", fill: "#bd5b45", fontSize: 12 }} /> : null}
+            {measurementEndIndex !== null && measurementEndIndex >= range.startIndex && measurementEndIndex <= range.endIndex ? <ReferenceLine x={chartData[measurementEndIndex - range.startIndex].chartDate} stroke="#bd5b45" strokeWidth={2} label={{ value: formatChartDate(chartData[measurementEndIndex - range.startIndex].chartDate), position: "top", fill: "#bd5b45", fontSize: 12 }} /> : null}
             <ReferenceLine y={plant.minWeight} stroke="#cf7459" strokeDasharray="4 4" label={{ value: "dry", position: "insideTopRight", fill: "#bd5b45", fontSize: 11 }} />
             <ReferenceLine y={plant.maxWeight} stroke="#6f9d78" strokeDasharray="4 4" label={{ value: "full", position: "insideBottomRight", fill: "#467555", fontSize: 11 }} />
             <Line type="monotone" dataKey="weight" connectNulls={false} isAnimationActive={false} stroke="#467555" strokeWidth={3} dot={{ fill: "#fbfcf8", stroke: "#467555", strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} />
