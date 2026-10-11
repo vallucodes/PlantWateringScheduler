@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react"
 import {
-  ArrowDownRight,
   ArrowUpRight,
   CalendarDays,
   Check,
@@ -28,6 +27,7 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceArea,
   ReferenceLine,
   Tooltip,
   XAxis,
@@ -369,7 +369,7 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
   const orderedGroupNames = groups.map((group) => group.name)
 
   return (
-    <div className="mt-9 overflow-visible border-y border-[#d8dfd5]">
+    <div className="overflow-visible border-y border-[#d8dfd5]">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e0e6dd] px-1 py-2">
         <div className="flex items-center gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={() => setExpandedGroups(Object.fromEntries(groups.map((group) => [group.name, true])))} className="h-8 gap-1.5 px-2 text-xs text-[#55705a] hover:bg-[#eef3eb]">
@@ -677,6 +677,7 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeigh
             <XAxis dataKey="chartDate" type="number" domain={["dataMin", "dataMax"]} ticks={monthlyTicks} interval={0} axisLine={false} tickLine={false} tickMargin={10} tickFormatter={formatChartDate} />
             <YAxis domain={weightAxis.domain} ticks={weightAxis.ticks} axisLine={false} tickLine={false} tickMargin={8} />
             <Tooltip shared={false} contentStyle={{ borderRadius: 8, borderColor: "#d8dfd5", backgroundColor: "#fbfcf8", color: "#1f3428" }} labelStyle={{ color: "#1f3428" }} labelFormatter={(value) => formatChartDate(value as number)} formatter={(value) => [`${value}g`, "Weight"]} />
+            {selectionStart !== null && selectionEnd !== null && selectionStart !== selectionEnd ? <ReferenceArea x1={chartData[selectionStart - range.startIndex].chartDate} x2={chartData[selectionEnd - range.startIndex].chartDate} fill="#9fbaa0" fillOpacity={0.28} stroke="#467555" strokeOpacity={0.6} /> : null}
             {measurementStartIndex !== null && measurementStartIndex >= range.startIndex && measurementStartIndex <= range.endIndex ? <ReferenceLine x={chartData[measurementStartIndex - range.startIndex].chartDate} stroke="#bd5b45" strokeWidth={2} label={{ value: formatChartDate(chartData[measurementStartIndex - range.startIndex].chartDate), position: "top", fill: "#bd5b45", fontSize: 12 }} /> : null}
             {measurementEndIndex !== null && measurementEndIndex >= range.startIndex && measurementEndIndex <= range.endIndex ? <ReferenceLine x={chartData[measurementEndIndex - range.startIndex].chartDate} stroke="#bd5b45" strokeWidth={2} label={{ value: formatChartDate(chartData[measurementEndIndex - range.startIndex].chartDate), position: "top", fill: "#bd5b45", fontSize: 12 }} /> : null}
             <ReferenceLine y={plant.minWeight} stroke="#cf7459" strokeDasharray="4 4" label={{ value: "dry", position: "insideTopRight", fill: "#bd5b45", fontSize: 11 }} />
@@ -1194,7 +1195,6 @@ import { setSeasonSetting } from "@/app/actions"
 export default function PlantDashboard({ plants, groupDates, lastUpdated, initialSeason }: { plants: Plant[]; groupDates: PersistedGroupDate[]; lastUpdated: string; initialSeason: "summer" | "winter" }) {
   const [plantList, setPlantList] = useState(plants)
   const [query, setQuery] = useState("")
-  const needsAttention = plantList.filter((plant) => getMoisture(plant).percentage < 50).length
 
   const addWeight = (plantId: number, date: string, weight: number) => {
     setPlantList((current) => current.map((plant) => {
@@ -1239,9 +1239,9 @@ export default function PlantDashboard({ plants, groupDates, lastUpdated, initia
     <main className="report-shell min-h-screen bg-[#0f1013] text-[#e7e9ed]">
       <CreatePlantDialog onCreated={(plant) => setPlantList((current) => [plant, ...current])} />
       <div className="mx-auto flex min-h-screen max-w-[1200px] flex-col bg-[#21242c] shadow-[0_0_80px_rgba(0,0,0,0.24)]">
-        <header className="flex items-center justify-between border-b border-[#e0e6dd] px-5 py-4 sm:px-10 lg:px-14"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-[#315d42] text-[#e8f2e0]"><Droplets className="size-4" /></div><span className="font-heading text-lg font-semibold tracking-tight">verdant</span></div><div className="flex items-center gap-2"><span className="hidden text-xs text-[#78847a] sm:inline">Last measurement {lastUpdated}</span><AdminAccess /></div></header>
-        <section className="border-b border-[#e0e6dd] px-5 pb-10 pt-10 sm:px-10 lg:px-14 lg:pb-12 lg:pt-14"><div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="max-w-xl font-heading text-4xl font-semibold tracking-[-0.04em] text-[#1f3428] sm:text-5xl">A little care goes a long way.</h1><p className="mt-4 max-w-lg text-sm leading-6 text-[#78847a]">Keep an eye on the quiet signals. Your plants are telling you when it is time for a drink.</p></div><div className="flex shrink-0 gap-8 border-l border-[#d8dfd5] pl-6"><div><p className="text-3xl font-semibold tracking-tight text-[#315d42]">{plantList.length}</p><p className="mt-1 text-xs text-[#78847a]">plants tracked</p></div><div><p className="flex items-center gap-1 text-3xl font-semibold tracking-tight text-[#bd5b45]">{needsAttention}<ArrowDownRight className="size-5" /></p><p className="mt-1 text-xs text-[#78847a]">need attention</p></div></div></div></section>
-        <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7"><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a group to see its plants.</p></div><WateringSchedule plants={plantList} groupDates={groupDates} query={query} initialSeason={initialSeason} onQueryChange={setQuery} onSeasonChanged={setSeasonSetting} onGroupWatered={waterGroup} onLastWateredChanged={saveLastWatered} onPlantDeleted={(plantId) => setPlantList((current) => current.filter((plant) => plant.id !== plantId))} onToleranceUpdated={(plantId, season, color) => setPlantList((current) => current.map((plant) => plant.id === plantId ? season === "winter" ? { ...plant, winterToleranceColor: color } : { ...plant, summerToleranceColor: color } : plant))} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
+        <header className="flex items-center justify-between px-5 py-4 sm:px-10 lg:px-14"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-[#315d42] text-[#e8f2e0]"><Droplets className="size-4" /></div><span className="font-heading text-lg font-semibold tracking-tight">verdant</span></div><div className="flex items-center gap-2"><span className="hidden text-xs text-[#78847a] sm:inline">Last measurement {lastUpdated}</span><AdminAccess /></div></header>
+        <section className="mx-5 border-y border-[#e0e6dd] px-0 pb-3 pt-6 sm:mx-10 lg:mx-14 lg:pb-4 lg:pt-8"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="whitespace-nowrap font-heading text-4xl font-semibold tracking-[-0.04em] text-[#1f3428] sm:text-5xl">A little care goes a long way.</h1></div></section>
+        <section className="flex-1 px-5 pb-7 pt-0 sm:px-10 lg:px-14 lg:pb-9"><WateringSchedule plants={plantList} groupDates={groupDates} query={query} initialSeason={initialSeason} onQueryChange={setQuery} onSeasonChanged={setSeasonSetting} onGroupWatered={waterGroup} onLastWateredChanged={saveLastWatered} onPlantDeleted={(plantId) => setPlantList((current) => current.filter((plant) => plant.id !== plantId))} onToleranceUpdated={(plantId, season, color) => setPlantList((current) => current.map((plant) => plant.id === plantId ? season === "winter" ? { ...plant, winterToleranceColor: color } : { ...plant, summerToleranceColor: color } : plant))} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
           if (plant.id !== plantId) return plant
           if (season === "winter") return { ...plant, winterGroup: nextGroup, winterWateringInterval: wateringInterval }
           return { ...plant, group: nextGroup, wateringInterval, room: wateringInterval ? `Every ${wateringInterval} days` : "No schedule" }
