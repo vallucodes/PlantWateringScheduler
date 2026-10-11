@@ -195,6 +195,34 @@
   background-color: #1a1e24 !important;
 }
 
+.report-shell [role="dialog"][aria-label="Overwatering tolerance"] button[title] {
+  margin-top: 1px;
+  margin-left: 1px;
+  width: calc(100% - 1px);
+  border: 1px solid transparent;
+  box-sizing: border-box;
+}
+
+.report-shell [role="dialog"][aria-label="Overwatering tolerance"] button[title] .capitalize {
+  display: none;
+}
+
+.report-shell [role="dialog"][aria-label="Overwatering tolerance"] button[title] {
+  justify-content: flex-start !important;
+  gap: 0.5rem !important;
+}
+
+.report-shell [role="dialog"][aria-label="Overwatering tolerance"] button[title] > span.ml-auto {
+  margin-left: 0 !important;
+}
+
+.report-shell [role="dialog"][aria-label="Overwatering tolerance"] button[title]:hover {
+  background-color: #30363f !important;
+  color: #f4f1e8 !important;
+  border-color: #d99535;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
 ::selection {
   background: #d6e6d0;
   color: #1f3428;

@@ -1,7 +1,11 @@
-import PlantDashboard from "@/components/plant-dashboard"
+import PlantDashboard, { type ToleranceColor } from "@/components/plant-dashboard"
 import { prisma } from "@/lib/prisma"
 
 export const dynamic = "force-dynamic"
+
+function parseToleranceColor(value: string): ToleranceColor {
+  return ["red", "orange", "green", "blue"].includes(value) ? value as ToleranceColor : "green"
+}
 
 function buildHistory(weightLogs: { date: Date; weight: number | null }[]) {
   if (weightLogs.length === 0) return []
@@ -73,6 +77,8 @@ export default async function Home() {
           winterWateringInterval: plant.winterWateringGroup?.intervalDays ?? null,
           winterLastWatered: plant.winterWateringGroup?.lastWateredAt?.toISOString() ?? null,
           estimatedWateringInterval: plant.estimatedWateringInterval,
+          summerToleranceColor: parseToleranceColor(plant.summerToleranceColor),
+          winterToleranceColor: parseToleranceColor(plant.winterToleranceColor),
           room: plant.wateringGroup?.intervalDays
             ? `Every ${plant.wateringGroup.intervalDays} days`
             : "No schedule",

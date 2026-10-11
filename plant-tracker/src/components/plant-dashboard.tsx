@@ -5,6 +5,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   CalendarDays,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -54,12 +55,27 @@ export type Plant = {
   winterGroup: string
   winterWateringInterval: number | null
   winterLastWatered: string | null
+  summerToleranceColor: ToleranceColor
+  winterToleranceColor: ToleranceColor
   estimatedWateringInterval: number | null
   lastWatered: string | null
   room: string
   minWeight: number
   maxWeight: number
   history: { date: string; weight: number | null }[]
+}
+
+export type ToleranceColor = "red" | "orange" | "green" | "blue"
+
+const toleranceColorValues: Array<{ name: ToleranceColor; label: string; value: string }> = [
+  { name: "red", label: "Loves dry", value: "#d94b4b" },
+  { name: "orange", label: "Tolerates dry", value: "#e58b3a" },
+  { name: "green", label: "Tolerates moisture", value: "#4f9b63" },
+  { name: "blue", label: "Likes moisture", value: "#4d83c2" },
+]
+
+function toleranceColorValue(color: ToleranceColor) {
+  return toleranceColorValues.find((option) => option.name === color)?.value ?? "#4f9b63"
 }
 
 type ScheduleGroup = {
@@ -265,7 +281,7 @@ function MondayCalendar({ value, onChange, disabled, compact = false, ariaLabel 
   )
 }
 
-function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryChange, onPlantUpdated, onEstimatedUpdated, onWeightAdded, onWeightRemoved, onGroupWatered, onLastWateredChanged, onSeasonChanged }: { plants: Plant[]; groupDates: PersistedGroupDate[]; query: string; initialSeason: "summer" | "winter"; onQueryChange: (query: string) => void; onPlantUpdated: (plantId: number, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: number, interval: number | null) => void; onWeightAdded: (plantId: number, date: string, weight: number) => void; onWeightRemoved: (plantId: number, date: string) => void; onGroupWatered: (plantId: number, season: "summer" | "winter") => Promise<string>; onLastWateredChanged: (plantId: number | null, season: "summer" | "winter", date: string | null, groupKey?: string) => Promise<string | null>; onSeasonChanged: (season: "summer" | "winter") => void }) {
+function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryChange, onPlantUpdated, onEstimatedUpdated, onToleranceUpdated, onWeightAdded, onWeightRemoved, onGroupWatered, onLastWateredChanged, onSeasonChanged }: { plants: Plant[]; groupDates: PersistedGroupDate[]; query: string; initialSeason: "summer" | "winter"; onQueryChange: (query: string) => void; onPlantUpdated: (plantId: number, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: number, interval: number | null) => void; onToleranceUpdated: (plantId: number, season: "summer" | "winter", color: ToleranceColor) => void; onWeightAdded: (plantId: number, date: string, weight: number) => void; onWeightRemoved: (plantId: number, date: string) => void; onGroupWatered: (plantId: number, season: "summer" | "winter") => Promise<string>; onLastWateredChanged: (plantId: number | null, season: "summer" | "winter", date: string | null, groupKey?: string) => Promise<string | null>; onSeasonChanged: (season: "summer" | "winter") => void }) {
   const [lastWateredDates, setLastWateredDates] = useState<Record<string, Date | null>>(
     () => Object.fromEntries([
       ...scheduleGroups.map((group) => [wateringDateKey("summer", group.name), null]),
@@ -283,6 +299,7 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
   const [season, setSeason] = useState<"summer" | "winter">(initialSeason)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [wateringGroup, setWateringGroup] = useState<string | null>(null)
+  const [openTolerancePlantId, setOpenTolerancePlantId] = useState<number | null>(null)
 
   const updateLastWatered = (seasonName: "summer" | "winter", groupName: string, date: Date | null) => {
     setLastWateredDates((current) => ({ ...current, [wateringDateKey(seasonName, groupName)]: date }))
@@ -456,7 +473,7 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
             </NextWateringColumn>
           )}
           </div>
-          {isExpanded && row.plants.length > 0 ? <div>{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} groupColor={groupColor} lastWateredDate={plant.group === "Unassigned" ? plantLastWateredDates[plantWateringDateKey(season, plant.id)] ?? null : null} onLastWateredUpdated={plant.group === "Unassigned" ? async (date) => { const savedDate = await onLastWateredChanged(plant.id, season, date ? date.toISOString().slice(0, 10) : null); updatePlantLastWatered(season, plant.id, savedDate ? new Date(savedDate) : null) } : undefined} onUpdated={(season, nextGroup, wateringInterval) => onPlantUpdated(plant.id, season, nextGroup, wateringInterval)} onEstimateUpdated={(interval) => onEstimatedUpdated(plant.id, interval)} onWeightAdded={(date, weight) => onWeightAdded(plant.id, date, weight)} onWeightRemoved={(date) => onWeightRemoved(plant.id, date)} />)}</div> : null}
+          {isExpanded && row.plants.length > 0 ? <div>{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} season={season} groupColor={groupColor} isToleranceOpen={openTolerancePlantId === plant.id} onToleranceOpenChange={(open) => setOpenTolerancePlantId(open ? plant.id : null)} lastWateredDate={plant.group === "Unassigned" ? plantLastWateredDates[plantWateringDateKey(season, plant.id)] ?? null : null} onLastWateredUpdated={plant.group === "Unassigned" ? async (date) => { const savedDate = await onLastWateredChanged(plant.id, season, date ? date.toISOString().slice(0, 10) : null); updatePlantLastWatered(season, plant.id, savedDate ? new Date(savedDate) : null) } : undefined} onUpdated={(season, nextGroup, wateringInterval) => onPlantUpdated(plant.id, season, nextGroup, wateringInterval)} onEstimateUpdated={(interval) => onEstimatedUpdated(plant.id, interval)} onToleranceUpdated={(color) => onToleranceUpdated(plant.id, season, color)} onWeightAdded={(date, weight) => onWeightAdded(plant.id, date, weight)} onWeightRemoved={(date) => onWeightRemoved(plant.id, date)} />)}</div> : null}
         </div>
       })}
       <div className="flex items-center justify-between gap-3 border-t border-[#d8dfd5] px-1 py-3">
@@ -877,12 +894,42 @@ function PlantScheduleEditor({ plant, onUpdated, onEstimateUpdated }: { plant: P
   )
 }
 
-function PlantCard({ plant, groupColor, lastWateredDate, onLastWateredUpdated, onUpdated, onEstimateUpdated, onWeightAdded, onWeightRemoved, onDeleted, onNameUpdated }: { plant: Plant; groupColor: GroupColor; lastWateredDate: Date | null; onLastWateredUpdated?: (date: Date | null) => Promise<void>; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightAdded: (date: string, weight: number) => void; onWeightRemoved: (date: string) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
+function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpenChange, lastWateredDate, onLastWateredUpdated, onUpdated, onEstimateUpdated, onToleranceUpdated, onWeightAdded, onWeightRemoved, onDeleted, onNameUpdated }: { plant: Plant; season: "summer" | "winter"; groupColor: GroupColor; isToleranceOpen: boolean; onToleranceOpenChange: (open: boolean) => void; lastWateredDate: Date | null; onLastWateredUpdated?: (date: Date | null) => Promise<void>; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onToleranceUpdated: (color: ToleranceColor) => void; onWeightAdded: (date: string, weight: number) => void; onWeightRemoved: (date: string) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
   const { current, percentage } = getMoisture(plant)
   const [weight, setWeight] = useState("")
   const [isSavingWeight, setIsSavingWeight] = useState(false)
   const [isRemovingWeight, setIsRemovingWeight] = useState(false)
   const [weightError, setWeightError] = useState<string | null>(null)
+  const toleranceColor = season === "winter" ? plant.winterToleranceColor : plant.summerToleranceColor
+  const setIsToleranceOpen = (nextOpen: boolean | ((current: boolean) => boolean)) => {
+    onToleranceOpenChange(typeof nextOpen === "function" ? nextOpen(isToleranceOpen) : nextOpen)
+  }
+
+  useEffect(() => {
+    if (!isToleranceOpen) return
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      if (target.closest('[role="dialog"][aria-label="Overwatering tolerance"]') || target.closest('button[title="Change overwatering tolerance"]')) return
+      onToleranceOpenChange(false)
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer)
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer)
+  }, [isToleranceOpen, onToleranceOpenChange])
+
+  const saveToleranceColor = async (color: ToleranceColor) => {
+    const response = await fetch(`/api/plants/${plant.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "setToleranceColor", season, color }),
+    })
+    const result = await response.json()
+    if (!response.ok) throw new Error(result.error ?? "Could not save tolerance color.")
+    onToleranceUpdated(color)
+    onToleranceOpenChange(false)
+  }
   const nextWatering = plant.group === "Unassigned" && lastWateredDate && plant.estimatedWateringInterval !== null
     ? addDays(lastWateredDate, plant.estimatedWateringInterval)
     : null
@@ -953,8 +1000,8 @@ function PlantCard({ plant, groupColor, lastWateredDate, onLastWateredUpdated, o
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <div role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click() } }} style={{ backgroundColor: groupColor.row, borderColor: groupColor.border }} className={`group relative grid w-full gap-4 border-t px-1 py-4 text-left transition-colors hover:brightness-110 sm:items-center grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)]`}>
-          <div className="flex min-w-0 items-center gap-3"><div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#dfe9d7] text-[#315d42]"><Sprout className="size-4" /></div><div className="min-w-0"><p className="truncate font-semibold text-[#1f3428]">{plant.name}</p></div></div>
+        <div role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click() } }} style={{ backgroundColor: groupColor.row, borderColor: groupColor.border }} className={`group relative grid w-full gap-4 border-t px-1 py-4 text-left transition-colors hover:brightness-110 sm:items-center grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)] ${isToleranceOpen ? "z-30" : ""}`}>
+          <div className="flex min-w-0 items-center gap-3"><div className="relative shrink-0"><button type="button" aria-label={`Change ${season} overwatering tolerance for ${plant.name}`} title="Change overwatering tolerance" onClick={(event) => { event.stopPropagation(); setIsToleranceOpen((open) => !open) }} onKeyDown={(event) => event.stopPropagation()} className="flex size-9 items-center justify-center rounded-full bg-[#dfe9d7] text-[#315d42]" style={{ border: `3px solid ${toleranceColorValue(toleranceColor)}` }}><Sprout className="size-4" /></button>{isToleranceOpen ? <div role="dialog" aria-label="Overwatering tolerance" onClick={(event) => event.stopPropagation()} className="absolute left-0 top-11 z-40 w-64 rounded-lg border border-[#cbdac8] bg-[#fbfcf8] p-2.5 text-[#1f3428] shadow-[0_12px_30px_rgba(15,16,19,0.24)]"><p className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6f896f]">Overwatering tolerance</p><p className="px-1 pt-0.5 text-xs text-[#78847a]">{season === "winter" ? "Winter" : "Summer"} setting</p><div className="mt-2 space-y-1">{toleranceColorValues.map((option) => { const isSelected = option.name === toleranceColor; return <button key={option.name} type="button" aria-label={option.label} title={option.label} onClick={() => { void saveToleranceColor(option.name) }} className={`flex h-9 w-full items-center justify-between gap-3 rounded-md px-2 text-left text-xs font-medium transition-colors ${isSelected ? "bg-[#e7ece4] text-[#1f3428]" : "text-[#55705a] hover:bg-[#eef3eb]"}`}><span className="flex items-center gap-2"><span className="size-4 shrink-0 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: option.value, boxShadow: `0 0 0 1px ${option.value}` }} /><span className="capitalize">{option.name}</span></span><span className="ml-auto text-[11px] font-normal text-[#78847a]">{option.label}</span>{isSelected ? <Check className="size-3.5 shrink-0 text-[#315d42]" /> : null}</button> })}</div></div> : null}</div><div className="min-w-0"><p className="truncate font-semibold text-[#1f3428]">{plant.name}</p></div></div>
           {plant.group === "Unassigned" ? <div className="col-span-2 flex min-w-0 items-center gap-3">
             <div className="flex shrink-0 items-center gap-2 text-sm">
               <div className="flex w-[5.25rem] shrink-0 items-center gap-1.5">
@@ -1019,7 +1066,6 @@ function CreatePlantDialog({ onCreated }: { onCreated: (plant: Plant) => void })
   const createPlant = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
-    setIsSaving(true)
     try {
       const response = await fetch("/api/plants", {
         method: "POST",
@@ -1178,7 +1224,7 @@ export default function PlantDashboard({ plants, groupDates, lastUpdated, initia
       <div className="mx-auto flex min-h-screen max-w-[1200px] flex-col bg-[#21242c] shadow-[0_0_80px_rgba(0,0,0,0.24)]">
         <header className="flex items-center justify-between border-b border-[#e0e6dd] px-5 py-4 sm:px-10 lg:px-14"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-[#315d42] text-[#e8f2e0]"><Droplets className="size-4" /></div><span className="font-heading text-lg font-semibold tracking-tight">verdant</span></div><div className="flex items-center gap-2"><span className="hidden text-xs text-[#78847a] sm:inline">Last measurement {lastUpdated}</span><AdminAccess /></div></header>
         <section className="border-b border-[#e0e6dd] px-5 pb-10 pt-10 sm:px-10 lg:px-14 lg:pb-12 lg:pt-14"><div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="max-w-xl font-heading text-4xl font-semibold tracking-[-0.04em] text-[#1f3428] sm:text-5xl">A little care goes a long way.</h1><p className="mt-4 max-w-lg text-sm leading-6 text-[#78847a]">Keep an eye on the quiet signals. Your plants are telling you when it is time for a drink.</p></div><div className="flex shrink-0 gap-8 border-l border-[#d8dfd5] pl-6"><div><p className="text-3xl font-semibold tracking-tight text-[#315d42]">{plantList.length}</p><p className="mt-1 text-xs text-[#78847a]">plants tracked</p></div><div><p className="flex items-center gap-1 text-3xl font-semibold tracking-tight text-[#bd5b45]">{needsAttention}<ArrowDownRight className="size-5" /></p><p className="mt-1 text-xs text-[#78847a]">need attention</p></div></div></div></section>
-        <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7"><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a group to see its plants.</p></div><WateringSchedule plants={plantList} groupDates={groupDates} query={query} initialSeason={initialSeason} onQueryChange={setQuery} onSeasonChanged={setSeasonSetting} onGroupWatered={waterGroup} onLastWateredChanged={saveLastWatered} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
+        <section className="flex-1 px-5 py-7 sm:px-10 lg:px-14 lg:py-9"><div className="mb-7"><h2 className="font-heading text-2xl font-semibold tracking-tight">Your collection</h2><p className="mt-1 text-sm text-[#78847a]">Tap a group to see its plants.</p></div><WateringSchedule plants={plantList} groupDates={groupDates} query={query} initialSeason={initialSeason} onQueryChange={setQuery} onSeasonChanged={setSeasonSetting} onGroupWatered={waterGroup} onLastWateredChanged={saveLastWatered} onToleranceUpdated={(plantId, season, color) => setPlantList((current) => current.map((plant) => plant.id === plantId ? season === "winter" ? { ...plant, winterToleranceColor: color } : { ...plant, summerToleranceColor: color } : plant))} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
           if (plant.id !== plantId) return plant
           if (season === "winter") return { ...plant, winterGroup: nextGroup, winterWateringInterval: wateringInterval }
           return { ...plant, group: nextGroup, wateringInterval, room: wateringInterval ? `Every ${wateringInterval} days` : "No schedule" }

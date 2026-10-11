@@ -12,12 +12,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const hasName = Object.prototype.hasOwnProperty.call(body ?? {}, "name")
   const hasInterval = Object.prototype.hasOwnProperty.call(body ?? {}, "intervalDays")
   const hasWinterInterval = Object.prototype.hasOwnProperty.call(body ?? {}, "winterIntervalDays")
+  const hasToleranceColor = Object.prototype.hasOwnProperty.call(body ?? {}, "toleranceColor")
+  const hasWinterToleranceColor = Object.prototype.hasOwnProperty.call(body ?? {}, "winterToleranceColor")
   const name = typeof body?.name === "string" ? body.name.trim() : ""
   const rawInterval = body?.intervalDays
   const rawWinterInterval = body?.winterIntervalDays
+  const toleranceColors = ["red", "orange", "green", "blue"] as const
+  const toleranceColor = body?.toleranceColor
+  const winterToleranceColor = body?.winterToleranceColor
 
-  if (!hasName && !hasInterval && !hasWinterInterval) return Response.json({ error: "No plant changes were provided." }, { status: 400 })
+  if (!hasName && !hasInterval && !hasWinterInterval && !hasToleranceColor && !hasWinterToleranceColor) return Response.json({ error: "No plant changes were provided." }, { status: 400 })
   if (hasName && !name) return Response.json({ error: "Plant name is required." }, { status: 400 })
+  if (hasToleranceColor && (typeof toleranceColor !== "string" || !toleranceColors.includes(toleranceColor as typeof toleranceColors[number]))) return Response.json({ error: "Invalid summer tolerance color." }, { status: 400 })
+  if (hasWinterToleranceColor && (typeof winterToleranceColor !== "string" || !toleranceColors.includes(winterToleranceColor as typeof toleranceColors[number]))) return Response.json({ error: "Invalid winter tolerance color." }, { status: 400 })
 
   if (hasInterval && rawInterval !== null && (!Number.isInteger(rawInterval) || rawInterval < 1 || rawInterval > 365)) {
     return Response.json({ error: "Interval must be a whole number from 1 to 365 days." }, { status: 400 })
@@ -30,8 +37,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
 
   if (!hasInterval && !hasWinterInterval) {
-    const updatedPlant = await prisma.plant.update({ where: { id: plantId }, data: { name } })
-    return Response.json({ name: updatedPlant.name })
+    const updatedPlant = await prisma.plant.update({
+      where: { id: plantId },
+      data: {
+        ...(hasName ? { name } : {}),
+        ...(hasToleranceColor ? { summerToleranceColor: toleranceColor as string } : {}),
+        ...(hasWinterToleranceColor ? { winterToleranceColor: winterToleranceColor as string } : {}),
+      },
+    })
+    return Response.json({ name: updatedPlant.name, summerToleranceColor: updatedPlant.summerToleranceColor, winterToleranceColor: updatedPlant.winterToleranceColor })
   }
 
   const [currentGroup, currentWinterGroup] = await Promise.all([
@@ -55,7 +69,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   await prisma.plant.update({
     where: { id: plantId },
-    data: { ...(hasName ? { name } : {}), wateringGroupId: wateringGroup.id, winterWateringGroupId: winterWateringGroup.id },
+    data: { ...(hasName ? { name } : {}), ...(hasToleranceColor ? { summerToleranceColor: toleranceColor as string } : {}), ...(hasWinterToleranceColor ? { winterToleranceColor: winterToleranceColor as string } : {}), wateringGroupId: wateringGroup.id, winterWateringGroupId: winterWateringGroup.id },
   })
 
   const selectedGroup = hasWinterInterval && !hasInterval ? winterWateringGroup : wateringGroup
@@ -70,6 +84,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const plantId = Number(id)
   if (!Number.isInteger(plantId) || plantId < 0) return Response.json({ error: "Invalid plant ID." }, { status: 400 })
   const body = await request.json().catch(() => null)
+
+  if (body?.action === "setToleranceColor") {
+    const season = body?.season === "winter" ? "winter" : body?.season === "summer" ? "summer" : null
+    const color = body?.color
+    const toleranceColors = ["red", "orange", "green", "blue"] as const
+    if (!season || typeof color !== "string" || !toleranceColors.includes(color as typeof toleranceColors[number])) {
+      return Response.json({ error: "Invalid tolerance color." }, { status: 400 })
+    }
+
+    const existingPlant = await prisma.plant.findUnique({ where: { id: plantId }, select: { id: true } })
+    if (!existingPlant) return Response.json({ error: "Plant not found." }, { status: 404 })
+
+    const plant = await prisma.plant.update({
+      where: { id: plantId },
+      data: season === "winter" ? { winterToleranceColor: color } : { summerToleranceColor: color },
+      select: { summerToleranceColor: true, winterToleranceColor: true },
+    })
+    return Response.json(plant)
+  }
 
   if (body?.action === "setLastWatered") {
     const season = body?.season === "winter" ? "winter" : "summer"
