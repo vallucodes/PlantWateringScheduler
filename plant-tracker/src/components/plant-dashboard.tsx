@@ -678,7 +678,7 @@ function PlantHistory({ plant, onUpdated, onEstimateUpdated, onWeightsUpdated, o
         </div>
         <DialogDescription className="text-[#55705a]">Weight history against your dry and fully-watered thresholds.</DialogDescription>
       </DialogHeader>
-      <div className="px-6 pb-6 pt-5">
+      <div className="px-6 pb-6 pt-2">
         <div className="relative mb-2 flex items-center justify-between">
           <PlantScheduleEditor plant={plant} onUpdated={onUpdated} onEstimateUpdated={onEstimateUpdated} onWeightsUpdated={onWeightsUpdated} />
           {measurementDays !== null ? <p className="absolute left-1/2 -translate-x-1/2 text-sm font-semibold text-[#315d42]">{measurementDays} days</p> : null}
@@ -710,15 +710,13 @@ function PlantHistory({ plant, onUpdated, onEstimateUpdated, onWeightsUpdated, o
             <Input id={`measurement-weight-${plant.id}`} type="number" min="0" step="0.1" aria-label="Weight in grams" value={measurementWeight} onChange={(event) => setMeasurementWeight(event.target.value)} placeholder="Weight (g)" className="h-8 border-[#cbdac8] bg-white" disabled={isSavingMeasurement} />
           </label>
           <Button type="submit" disabled={isSavingMeasurement}>{isSavingMeasurement ? "Saving..." : "Add weight"}</Button>
-          {measurementError ? <p className="text-sm text-[#bd5b45] sm:col-span-3" role="alert">{measurementError}</p> : null}
-        </form>
-        <div className="mt-5 flex items-center justify-between border-t border-[#d8e4d4] pt-4">
-          {deleteError ? <p className="text-sm text-[#bd5b45]" role="alert">{deleteError}</p> : <span />}
-          <Button type="button" variant="destructive" size="sm" onClick={deletePlant} disabled={isDeleting} className="border-[#8f3528] bg-[#a74332] text-white hover:bg-[#8f3528] hover:text-white">
+          <Button type="button" variant="destructive" size="sm" onClick={deletePlant} disabled={isDeleting} className="ml-auto border-[#8f3528] bg-[#a74332] text-white hover:bg-[#8f3528] hover:text-white">
             <Trash2 className="size-3.5" />
             {isDeleting ? "Deleting..." : "Delete plant"}
           </Button>
-        </div>
+          {measurementError ? <p className="basis-full text-sm text-[#bd5b45]" role="alert">{measurementError}</p> : null}
+          {deleteError ? <p className="basis-full text-sm text-[#bd5b45]" role="alert">{deleteError}</p> : null}
+        </form>
       </div>
     </DialogContent>
   )
@@ -893,7 +891,7 @@ function PlantScheduleEditor({ plant, onUpdated, onEstimateUpdated, onWeightsUpd
       <DialogTrigger asChild>
         <Button type="button" variant="outline" size="sm" className="h-8 border-[#b97922] bg-[#d99535] text-[#111318] hover:bg-[#b97922] hover:text-[#111318]">
           <Pencil className="size-3.5" />
-          Modify watering group
+          Modify
         </Button>
       </DialogTrigger>
       <DialogContent className="border-[#d8dfd5] bg-[#fbfcf8] sm:max-w-md">
