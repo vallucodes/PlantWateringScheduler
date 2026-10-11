@@ -542,18 +542,35 @@ function PlantHistory({ plant, onUpdated, onEstimateUpdated, onWeightsUpdated, o
   const dataMin = Math.min(plant.minWeight, ...visibleWeights)
   const dataMax = Math.max(plant.maxWeight, ...visibleWeights)
   const weightAxis = getWeightAxis(dataMin, dataMax)
-  const chartData = visibleHistory.map((entry) => ({ ...entry, chartDate: parseChartDate(entry.date) }))
+  const today = new Date()
+  const chartEndDate = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+  const historyChartData = visibleHistory.map((entry) => ({ ...entry, chartDate: parseChartDate(entry.date) }))
+  const chartStartDate = historyChartData[0]?.chartDate ?? chartEndDate
+  const chartDayCount = Math.max(1, Math.floor((chartEndDate - chartStartDate) / 86400000) + 1)
+  const chartData = Array.from({ length: chartDayCount }, (_, index) => {
+    const chartDate = chartStartDate + index * 86400000
+    const historyEntry = historyChartData.find((entry) => entry.chartDate === chartDate)
+    return { date: historyEntry?.date ?? "", weight: historyEntry?.weight ?? null, chartDate }
+  })
   const monthlyTicks = chartData.filter((entry) => new Date(entry.chartDate).getUTCDate() === 1).map((entry) => entry.chartDate)
-  const selectedStart = selectionStart !== null && selectionEnd !== null ? Math.min(selectionStart, selectionEnd) : range.startIndex
-  const selectedEnd = selectionStart !== null && selectionEnd !== null ? Math.max(selectionStart, selectionEnd) : range.endIndex
   const measurementDays = measurementStartIndex !== null && measurementEndIndex !== null
-    ? Math.round(Math.abs(parseChartDate(plant.history[measurementEndIndex].date) - parseChartDate(plant.history[measurementStartIndex].date)) / 86400000)
+    ? Math.round(Math.abs(chartData[measurementEndIndex].chartDate - chartData[measurementStartIndex].chartDate) / 86400000)
     : null
 
   const indexFromChartEvent = (event: { activeTooltipIndex?: number | string | null } | undefined) => {
     if (event?.activeTooltipIndex === undefined || event.activeTooltipIndex === null) return null
-    const index = Number(event.activeTooltipIndex) + range.startIndex
-    return Number.isInteger(index) && index >= 0 && index < plant.history.length ? index : null
+    const index = Number(event.activeTooltipIndex)
+    return Number.isInteger(index) && index >= 0 && index < chartData.length ? index : null
+  }
+
+  const historyIndexFromChartIndex = (chartIndex: number) => {
+    const chartDate = chartData[chartIndex]?.chartDate
+    if (chartDate === undefined || plant.history.length === 0) return 0
+    return plant.history.reduce((closestIndex, entry, index) => {
+      const closestDistance = Math.abs(parseChartDate(plant.history[closestIndex].date) - chartDate)
+      const distance = Math.abs(parseChartDate(entry.date) - chartDate)
+      return distance < closestDistance ? index : closestIndex
+    }, 0)
   }
 
   const handleChartMouseDown = (event: { activeTooltipIndex?: number | string | null } | undefined) => {
@@ -580,7 +597,9 @@ function PlantHistory({ plant, onUpdated, onEstimateUpdated, onWeightsUpdated, o
       }
     }
     if (selectionStart !== null && selectionEnd !== null && selectionStart !== selectionEnd) {
-      setRange({ startIndex: Math.min(selectionStart, selectionEnd), endIndex: Math.max(selectionStart, selectionEnd) })
+      setRange({ startIndex: historyIndexFromChartIndex(Math.min(selectionStart, selectionEnd)), endIndex: historyIndexFromChartIndex(Math.max(selectionStart, selectionEnd)) })
+      setMeasurementStartIndex(null)
+      setMeasurementEndIndex(null)
     }
     setSelectionStart(null)
     setSelectionEnd(null)
@@ -596,6 +615,8 @@ function PlantHistory({ plant, onUpdated, onEstimateUpdated, onWeightsUpdated, o
     setRange(fullRange)
     setSelectionStart(null)
     setSelectionEnd(null)
+    setMeasurementStartIndex(null)
+    setMeasurementEndIndex(null)
   }
 
   const saveMeasurement = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -662,12 +683,12 @@ function PlantHistory({ plant, onUpdated, onEstimateUpdated, onWeightsUpdated, o
         <ChartContainer config={{ weight: { label: "Weight", color: "#467555" } }} className="h-[260px] w-full">
           <LineChart data={chartData} margin={{ top: 16, right: 12, left: 0, bottom: 0 }} onMouseDown={handleChartMouseDown} onMouseMove={handleChartMouseMove} onMouseUp={handleChartMouseUp} onMouseLeave={handleChartMouseLeave}>
             <CartesianGrid vertical={false} stroke="#e2e8df" />
-            <XAxis dataKey="chartDate" type="number" domain={["dataMin", "dataMax"]} ticks={monthlyTicks} interval={0} axisLine={false} tickLine={false} tickMargin={10} tickFormatter={formatChartDate} />
+            <XAxis dataKey="chartDate" type="number" domain={["dataMin", chartEndDate]} ticks={monthlyTicks} interval={0} axisLine={false} tickLine={false} tickMargin={10} tickFormatter={formatChartDate} />
             <YAxis domain={weightAxis.domain} ticks={weightAxis.ticks} axisLine={false} tickLine={false} tickMargin={8} />
             <Tooltip shared={false} contentStyle={{ borderRadius: 8, borderColor: "#d8dfd5", backgroundColor: "#fbfcf8", color: "#1f3428" }} labelStyle={{ color: "#1f3428" }} labelFormatter={(value) => formatChartDate(value as number)} formatter={(value) => [`${value}g`, "Weight"]} />
-            {selectionStart !== null && selectionEnd !== null && selectionStart !== selectionEnd ? <ReferenceArea x1={chartData[selectionStart - range.startIndex].chartDate} x2={chartData[selectionEnd - range.startIndex].chartDate} fill="#9fbaa0" fillOpacity={0.28} stroke="#467555" strokeOpacity={0.6} /> : null}
-            {measurementStartIndex !== null && measurementStartIndex >= range.startIndex && measurementStartIndex <= range.endIndex ? <ReferenceLine x={chartData[measurementStartIndex - range.startIndex].chartDate} stroke="#bd5b45" strokeWidth={2} label={{ value: formatChartDate(chartData[measurementStartIndex - range.startIndex].chartDate), position: "top", fill: "#bd5b45", fontSize: 12 }} /> : null}
-            {measurementEndIndex !== null && measurementEndIndex >= range.startIndex && measurementEndIndex <= range.endIndex ? <ReferenceLine x={chartData[measurementEndIndex - range.startIndex].chartDate} stroke="#bd5b45" strokeWidth={2} label={{ value: formatChartDate(chartData[measurementEndIndex - range.startIndex].chartDate), position: "top", fill: "#bd5b45", fontSize: 12 }} /> : null}
+            {selectionStart !== null && selectionEnd !== null && selectionStart !== selectionEnd ? <ReferenceArea x1={chartData[selectionStart].chartDate} x2={chartData[selectionEnd].chartDate} fill="#9fbaa0" fillOpacity={0.28} stroke="#467555" strokeOpacity={0.6} /> : null}
+            {measurementStartIndex !== null && measurementStartIndex < chartData.length ? <ReferenceLine x={chartData[measurementStartIndex].chartDate} stroke="#bd5b45" strokeWidth={2} label={{ value: formatChartDate(chartData[measurementStartIndex].chartDate), position: "top", fill: "#bd5b45", fontSize: 12 }} /> : null}
+            {measurementEndIndex !== null && measurementEndIndex < chartData.length ? <ReferenceLine x={chartData[measurementEndIndex].chartDate} stroke="#bd5b45" strokeWidth={2} label={{ value: formatChartDate(chartData[measurementEndIndex].chartDate), position: "top", fill: "#bd5b45", fontSize: 12 }} /> : null}
             <ReferenceLine y={plant.minWeight} stroke="#cf7459" strokeDasharray="4 4" label={{ value: "dry", position: "insideTopRight", fill: "#bd5b45", fontSize: 11 }} />
             <ReferenceLine y={plant.maxWeight} stroke="#6f9d78" strokeDasharray="4 4" label={{ value: "full", position: "insideBottomRight", fill: "#467555", fontSize: 11 }} />
             <Line type="monotone" dataKey="weight" connectNulls={false} isAnimationActive={false} stroke="#467555" strokeWidth={3} dot={{ fill: "#fbfcf8", stroke: "#467555", strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} />
