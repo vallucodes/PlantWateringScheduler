@@ -1,3 +1,6 @@
+Build
+npm run lint && npm run build && npm run dev
+
 Local docker running database and adminer
 docker ps
 
