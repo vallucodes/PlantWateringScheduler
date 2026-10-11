@@ -234,6 +234,7 @@ function MondayCalendar({ value, onChange, disabled, compact = false, ariaLabel 
   const selectedDateLabel = value ? selectedDate.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" }) : "Not recorded"
   const today = new Date()
   const todayValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
+  const currentMonth = new Date(Date.UTC(today.getFullYear(), today.getMonth(), 1))
 
   useEffect(() => {
     if (!open) return
@@ -252,7 +253,7 @@ function MondayCalendar({ value, onChange, disabled, compact = false, ariaLabel 
 
   return (
     <div ref={calendarRef} className="relative">
-      <Button type="button" variant={compact ? "ghost" : "outline"} size="sm" aria-label={ariaLabel} title={ariaLabel} onClick={(event) => { event.stopPropagation(); setOpen((current) => !current) }} disabled={disabled} className={compact ? "size-6 border-transparent bg-transparent p-0 text-[#55705a] hover:bg-transparent" : "h-8 border-[#cbdac8] px-2 text-[#55705a] hover:bg-[#eef3eb]"}>
+      <Button type="button" variant={compact ? "ghost" : "outline"} size="sm" aria-label={ariaLabel} title={ariaLabel} onClick={(event) => { event.stopPropagation(); if (!open) setVisibleMonth(currentMonth); setOpen((current) => !current) }} disabled={disabled} className={compact ? "size-6 border-transparent bg-transparent p-0 text-[#55705a] hover:bg-transparent" : "h-8 border-[#cbdac8] px-2 text-[#55705a] hover:bg-[#eef3eb]"}>
         <CalendarDays className="size-3.5" />
         {!compact ? <span>{selectedDateLabel}</span> : null}
       </Button>
