@@ -231,7 +231,7 @@ function MondayCalendar({ value, onChange, disabled, compact = false, ariaLabel 
   const daysInMonth = new Date(Date.UTC(visibleMonth.getUTCFullYear(), visibleMonth.getUTCMonth() + 1, 0)).getUTCDate()
   const days = Array.from({ length: firstWeekday + daysInMonth }, (_, index) => index < firstWeekday ? null : index - firstWeekday + 1)
   const monthLabel = visibleMonth.toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })
-  const selectedDateLabel = value ? selectedDate.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" }) : "Not recorded"
+  const selectedDateLabel = value ? `${String(selectedDate.getUTCDate()).padStart(2, "0")}.${String(selectedDate.getUTCMonth() + 1).padStart(2, "0")}` : "Not recorded"
   const today = new Date()
   const todayValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
   const currentMonth = new Date(Date.UTC(today.getFullYear(), today.getMonth(), 1))
@@ -253,7 +253,7 @@ function MondayCalendar({ value, onChange, disabled, compact = false, ariaLabel 
 
   return (
     <div ref={calendarRef} className="relative">
-      <Button type="button" variant={compact ? "ghost" : "outline"} size="sm" aria-label={ariaLabel} title={ariaLabel} onClick={(event) => { event.stopPropagation(); if (!open) setVisibleMonth(currentMonth); setOpen((current) => !current) }} disabled={disabled} className={compact ? "size-6 border-transparent bg-transparent p-0 text-[#55705a] hover:bg-transparent" : "h-8 border-[#cbdac8] px-2 text-[#55705a] hover:bg-[#eef3eb]"}>
+      <Button type="button" variant={compact ? "ghost" : "outline"} size="sm" aria-label={ariaLabel} title={ariaLabel} onClick={(event) => { event.stopPropagation(); if (!open) setVisibleMonth(currentMonth); setOpen((current) => !current) }} disabled={disabled} className={compact ? "size-6 border-transparent bg-transparent p-0 text-[#55705a] hover:bg-transparent" : "h-8 border-[#b97922] bg-[#d99535] px-2 text-[#111318] hover:bg-[#b97922] hover:text-[#111318]"}>
         <CalendarDays className="size-3.5" />
         {!compact ? <span>{selectedDateLabel}</span> : null}
       </Button>
@@ -387,7 +387,7 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
             <Input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search plants" className="h-9 w-full border-[#d8dfd5] bg-[#f7f9f5] pl-9 text-sm md:w-44" />
             {query && <button type="button" aria-label="Clear search" onClick={() => onQueryChange("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9aa39b]"><X className="size-3.5" /></button>}
           </div>
-          <Button type="button" variant="outline" size="icon" aria-label="Add plant" className="h-9 w-9 border-[#d8dfd5] text-[#315d42]"><Plus className="size-4" /></Button>
+          <Button type="button" variant="outline" size="icon" aria-label="Add plant" className="h-9 w-9 border-[#315d42] bg-[#315d42] text-[#f4f1e8] hover:border-[#1f3428] hover:bg-[#1f3428] hover:text-white"><Plus className="size-4" strokeWidth={2.5} /></Button>
         </div>
       </div>
       <div className="grid grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] items-center gap-4 border-b border-[#e0e6dd] px-1 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9aa39b] sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)]">
@@ -525,7 +525,7 @@ function formatChartDate(value: string | number) {
   return `${day}.${month}`
 }
 
-function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeightsUpdated, onWeightAdded, onDeleted, onNameUpdated }: { plant: Plant; percentage: number; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightsUpdated: (minWeight: number, maxWeight: number) => void; onWeightAdded: (date: string, weight: number) => void; onDeleted: () => void; onNameUpdated: (name: string) => void }) {
+function PlantHistory({ plant, onUpdated, onEstimateUpdated, onWeightsUpdated, onWeightAdded, onDeleted, onNameUpdated }: { plant: Plant; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightsUpdated: (minWeight: number, maxWeight: number) => void; onWeightAdded: (date: string, weight: number) => void; onDeleted: () => void; onNameUpdated: (name: string) => void }) {
   const [range, setRange] = useState({ startIndex: 0, endIndex: Math.max(0, plant.history.length - 1) })
   const [selectionStart, setSelectionStart] = useState<number | null>(null)
   const [selectionEnd, setSelectionEnd] = useState<number | null>(null)
@@ -546,7 +546,6 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeigh
   const monthlyTicks = chartData.filter((entry) => new Date(entry.chartDate).getUTCDate() === 1).map((entry) => entry.chartDate)
   const selectedStart = selectionStart !== null && selectionEnd !== null ? Math.min(selectionStart, selectionEnd) : range.startIndex
   const selectedEnd = selectionStart !== null && selectionEnd !== null ? Math.max(selectionStart, selectionEnd) : range.endIndex
-  const selectedDates = plant.history.length > 0 ? `${plant.history[selectedStart].date} - ${plant.history[selectedEnd].date}` : "No dates"
   const measurementDays = measurementStartIndex !== null && measurementEndIndex !== null
     ? Math.round(Math.abs(parseChartDate(plant.history[measurementEndIndex].date) - parseChartDate(plant.history[measurementStartIndex].date)) / 86400000)
     : null
@@ -643,31 +642,20 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeigh
   }
 
   return (
-    <DialogContent className="max-w-2xl border-[#d8dfd5] bg-[#fbfcf8] p-0 sm:max-w-2xl">
-      <DialogHeader className="border-b border-[#e4e9e1] px-6 py-5">
-        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-[#6f896f]"><Leaf className="size-3.5" /> {plant.group}</div>
+    <DialogContent className="max-w-2xl border-[#dfd0ad] bg-[#fff8e8] p-0 text-[#24352a] shadow-[0_24px_70px_rgba(15,34,22,0.22)] sm:max-w-2xl">
+      <DialogHeader className="border-b border-[#d8e4d4] bg-[#edf5ea] px-6 py-5">
+        <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-[#467555]"><Leaf className="size-3.5" /> {plant.group}</div>
         <div className="flex items-center gap-2">
           <DialogTitle className="font-heading text-2xl text-[#1f3428]">{plant.name}</DialogTitle>
           <PlantNameEditor plant={plant} onUpdated={onNameUpdated} />
         </div>
-        <DialogDescription>Weight history against your dry and fully-watered thresholds.</DialogDescription>
+        <DialogDescription className="text-[#55705a]">Weight history against your dry and fully-watered thresholds.</DialogDescription>
       </DialogHeader>
       <div className="px-6 pb-6 pt-5">
-        <PlantScheduleEditor plant={plant} onUpdated={onUpdated} onEstimateUpdated={onEstimateUpdated} onWeightsUpdated={onWeightsUpdated} />
-        <div className="mb-5 grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-md bg-[#f0f4ed] px-2 py-3"><p className="text-[10px] uppercase tracking-[0.12em] text-[#889488]">Current</p><p className="mt-1 font-semibold text-[#315d42]">{getMoisture(plant).current}g</p></div>
-          <div className="rounded-md bg-[#f0f4ed] px-2 py-3"><p className="text-[10px] uppercase tracking-[0.12em] text-[#889488]">Dry line</p><p className="mt-1 font-semibold text-[#bd5b45]">{plant.minWeight}g</p></div>
-          <div className="rounded-md bg-[#f0f4ed] px-2 py-3"><p className="text-[10px] uppercase tracking-[0.12em] text-[#889488]">Range left</p><p className="mt-1 font-semibold text-[#a4772b]">{percentage}%</p></div>
-        </div>
         <div className="relative mb-2 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.12em] text-[#889488]">History window</p>
-            <div className="mt-1 flex items-center gap-3 text-xs">
-              <p className="text-[#78847a]">{selectedDates}</p>
-            </div>
-          </div>
+          <PlantScheduleEditor plant={plant} onUpdated={onUpdated} onEstimateUpdated={onEstimateUpdated} onWeightsUpdated={onWeightsUpdated} />
           {measurementDays !== null ? <p className="absolute left-1/2 -translate-x-1/2 text-sm font-semibold text-[#315d42]">{measurementDays} days</p> : null}
-          <button type="button" onClick={resetRange} aria-label="Show full weight history" className="rounded-md p-1.5 text-[#78847a] transition-colors hover:bg-[#eef3eb] hover:text-[#315d42]">
+          <button type="button" onClick={resetRange} aria-label="Show full weight history" className="rounded-md p-1.5 text-[#55705a] transition-colors hover:bg-[#dfeede] hover:text-[#1f3428]">
             <RotateCcw className="size-3.5" />
           </button>
         </div>
@@ -685,7 +673,7 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeigh
             <Line type="monotone" dataKey="weight" connectNulls={false} isAnimationActive={false} stroke="#467555" strokeWidth={3} dot={{ fill: "#fbfcf8", stroke: "#467555", strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} />
           </LineChart>
         </ChartContainer>
-        <form onSubmit={saveMeasurement} className="mt-5 flex flex-wrap items-end justify-start gap-2 border-t border-[#e4e9e1] pt-4">
+        <form onSubmit={saveMeasurement} className="mt-5 flex flex-wrap items-end justify-start gap-2 border-t border-[#d8e4d4] pt-4">
           <label className="block text-sm font-medium text-[#315d42]" htmlFor={`measurement-date-${plant.id}`}>
             <span className="sr-only">Date</span>
             <MondayCalendar value={measurementDate} onChange={(value) => { if (value) setMeasurementDate(value) }} disabled={isSavingMeasurement} />
@@ -697,9 +685,9 @@ function PlantHistory({ plant, percentage, onUpdated, onEstimateUpdated, onWeigh
           <Button type="submit" disabled={isSavingMeasurement}>{isSavingMeasurement ? "Saving..." : "Add weight"}</Button>
           {measurementError ? <p className="text-sm text-[#bd5b45] sm:col-span-3" role="alert">{measurementError}</p> : null}
         </form>
-        <div className="mt-5 flex items-center justify-between border-t border-[#e4e9e1] pt-4">
+        <div className="mt-5 flex items-center justify-between border-t border-[#d8e4d4] pt-4">
           {deleteError ? <p className="text-sm text-[#bd5b45]" role="alert">{deleteError}</p> : <span />}
-          <Button type="button" variant="destructive" size="sm" onClick={deletePlant} disabled={isDeleting}>
+          <Button type="button" variant="destructive" size="sm" onClick={deletePlant} disabled={isDeleting} className="border-[#8f3528] bg-[#a74332] text-white hover:bg-[#8f3528] hover:text-white">
             <Trash2 className="size-3.5" />
             {isDeleting ? "Deleting..." : "Delete plant"}
           </Button>
@@ -760,7 +748,7 @@ function PlantNameEditor({ plant, onUpdated }: { plant: Plant; onUpdated: (name:
           </label>
           {error ? <p className="text-sm text-[#bd5b45]" role="alert">{error}</p> : null}
           <div className="flex justify-end gap-2">
-            <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+            <DialogClose asChild><Button type="button" variant="outline" className="border-[#a74332] bg-[#bd5b45] text-white hover:border-[#8f3528] hover:bg-[#8f3528] hover:text-white">Cancel</Button></DialogClose>
             <Button type="submit" disabled={isSaving}>{isSaving ? "Saving..." : "Save name"}</Button>
           </div>
         </form>
@@ -876,7 +864,7 @@ function PlantScheduleEditor({ plant, onUpdated, onEstimateUpdated, onWeightsUpd
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className="h-8 border-[#cbdac8] text-[#315d42] hover:bg-[#eef3eb]">
+        <Button type="button" variant="outline" size="sm" className="h-8 border-[#b97922] bg-[#d99535] text-[#111318] hover:bg-[#b97922] hover:text-[#111318]">
           <Pencil className="size-3.5" />
           Modify watering group
         </Button>
@@ -935,7 +923,7 @@ function PlantScheduleEditor({ plant, onUpdated, onEstimateUpdated, onWeightsUpd
             </div>
             <Button type="submit" disabled={isSaving} className="w-full">{isSaving ? "Saving..." : "Save weights"}</Button>
           </form>
-          <div className="flex justify-end"><DialogClose asChild><Button type="button" variant="outline">Close</Button></DialogClose></div>
+          <div className="flex justify-end"><DialogClose asChild><Button type="button" variant="outline" className="border-[#a74332] bg-[#bd5b45] text-white hover:border-[#8f3528] hover:bg-[#8f3528] hover:text-white">Close</Button></DialogClose></div>
       </DialogContent>
     </Dialog>
   )
@@ -1096,7 +1084,7 @@ function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpen
           </div>}
         </div>
       </DialogTrigger>
-      <PlantHistory plant={plant} percentage={getMoisture(plant).percentage} onUpdated={onUpdated} onEstimateUpdated={onEstimateUpdated} onWeightsUpdated={onWeightsUpdated} onWeightAdded={onWeightAdded} onDeleted={onDeleted ?? (() => window.location.reload())} onNameUpdated={onNameUpdated ?? (() => window.location.reload())} />
+      <PlantHistory plant={plant} onUpdated={onUpdated} onEstimateUpdated={onEstimateUpdated} onWeightsUpdated={onWeightsUpdated} onWeightAdded={onWeightAdded} onDeleted={onDeleted ?? (() => window.location.reload())} onNameUpdated={onNameUpdated ?? (() => window.location.reload())} />
     </Dialog>
   )
 }
@@ -1163,7 +1151,7 @@ function CreatePlantDialog({ onCreated }: { onCreated: (plant: Plant) => void })
           <label className="block text-sm font-medium text-[#315d42]" htmlFor="plant-interval">Days between waterings<Input id="plant-interval" type="number" min="1" max="365" step="1" value={interval} onChange={(event) => setInterval(event.target.value)} placeholder="Optional" className="mt-1.5 border-[#cbdac8] bg-white" /></label>
           {error ? <p className="text-sm text-[#bd5b45]" role="alert">{error}</p> : null}
           <div className="flex justify-end gap-2">
-            <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+            <DialogClose asChild><Button type="button" variant="outline" className="border-[#a74332] bg-[#bd5b45] text-white hover:border-[#8f3528] hover:bg-[#8f3528] hover:text-white">Cancel</Button></DialogClose>
             <Button type="submit" disabled={isSaving}>{isSaving ? "Adding..." : "Add plant"}</Button>
           </div>
         </form>
@@ -1285,7 +1273,7 @@ export default function PlantDashboard({ plants, groupDates, lastUpdated, initia
       <CreatePlantDialog onCreated={(plant) => setPlantList((current) => [plant, ...current])} />
       <div className="mx-auto flex min-h-screen max-w-[1200px] flex-col bg-[#21242c] shadow-[0_0_80px_rgba(0,0,0,0.24)]">
         <header className="flex items-center justify-between px-5 py-4 sm:px-10 lg:px-14"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-[#315d42] text-[#e8f2e0]"><Droplets className="size-4" /></div><span className="font-heading text-lg font-semibold tracking-tight">verdant</span></div><div className="flex items-center gap-2"><span className="hidden text-xs text-[#78847a] sm:inline">Last measurement {lastUpdated}</span><AdminAccess /></div></header>
-        <section className="mx-5 border-y border-[#e0e6dd] px-0 pb-3 pt-6 sm:mx-10 lg:mx-14 lg:pb-4 lg:pt-8"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="whitespace-nowrap font-heading text-4xl font-semibold tracking-[-0.04em] text-[#1f3428] sm:text-5xl">A little care goes a long way.</h1></div></section>
+        <section className="mx-5 border-y border-[#e0e6dd] px-0 pb-3 pt-6 sm:mx-10 lg:mx-14 lg:pb-4 lg:pt-8"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="whitespace-nowrap font-heading text-4xl font-semibold tracking-[-0.04em] text-[#1f3428] sm:text-3xl">A little care goes a long way.</h1></div></section>
         <section className="flex-1 px-5 pb-7 pt-0 sm:px-10 lg:px-14 lg:pb-9"><WateringSchedule plants={plantList} groupDates={groupDates} query={query} initialSeason={initialSeason} onQueryChange={setQuery} onSeasonChanged={setSeasonSetting} onGroupWatered={waterGroup} onLastWateredChanged={saveLastWatered} onPlantDeleted={(plantId) => setPlantList((current) => current.filter((plant) => plant.id !== plantId))} onWeightsUpdated={(plantId, minWeight, maxWeight) => setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, minWeight, maxWeight } : plant))} onToleranceUpdated={(plantId, season, color) => setPlantList((current) => current.map((plant) => plant.id === plantId ? season === "winter" ? { ...plant, winterToleranceColor: color } : { ...plant, summerToleranceColor: color } : plant))} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
           if (plant.id !== plantId) return plant
           if (season === "winter") return { ...plant, winterGroup: nextGroup, winterWateringInterval: wateringInterval }
