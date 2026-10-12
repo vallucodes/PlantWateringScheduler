@@ -34,6 +34,8 @@ model Plant {
   winterWateringGroupId String?
   winterWateringGroup   WateringGroup? @relation("WinterWateringGroups", fields: [winterWateringGroupId], references: [id], onDelete: SetNull)
   estimatedWateringInterval Int?
+  summerLastWateredAt DateTime?
+  winterLastWateredAt DateTime?
   summerToleranceColor String @default("green")
   winterToleranceColor String @default("green")
   weightLogs        WeightLog[]

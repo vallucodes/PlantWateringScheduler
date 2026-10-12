@@ -131,19 +131,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const plant = await prisma.plant.findUnique({
       where: { id: plantId },
-      select: { wateringGroupId: true, winterWateringGroupId: true },
+      select: { wateringGroup: { select: { id: true, intervalDays: true } }, winterWateringGroup: { select: { id: true, intervalDays: true } } },
     })
     if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
 
-    const groupId = season === "winter" ? plant.winterWateringGroupId : plant.wateringGroupId
-    if (!groupId) return Response.json({ error: "Plant has no watering group." }, { status: 400 })
+    const group = season === "winter" ? plant.winterWateringGroup : plant.wateringGroup
+    if (!group) return Response.json({ error: "Plant has no watering group." }, { status: 400 })
 
-    const group = await prisma.wateringGroup.update({
-      where: { id: groupId },
+    if (group.intervalDays === null) {
+      const updatedPlant = await prisma.plant.update({
+        where: { id: plantId },
+        data: season === "winter" ? { winterLastWateredAt: date } : { summerLastWateredAt: date },
+        select: { summerLastWateredAt: true, winterLastWateredAt: true },
+      })
+      const lastWateredAt = season === "winter" ? updatedPlant.winterLastWateredAt : updatedPlant.summerLastWateredAt
+      return Response.json({ date: lastWateredAt?.toISOString() ?? null })
+    }
+
+    const updatedGroup = await prisma.wateringGroup.update({
+      where: { id: group.id },
       data: { lastWateredAt: date },
       select: { lastWateredAt: true },
     })
-    return Response.json({ date: group.lastWateredAt?.toISOString() ?? null })
+    return Response.json({ date: updatedGroup.lastWateredAt?.toISOString() ?? null })
   }
 
   if (body?.action === "water") {
