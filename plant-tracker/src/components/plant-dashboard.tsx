@@ -74,6 +74,37 @@ const toleranceColorValues: Array<{ name: ToleranceColor; label: string; value: 
   { name: "blue", label: "Likes moisture", value: "#4d83c2" },
 ]
 
+const plantImageFiles: Record<string, string> = {
+  "Aloë aristata": "aloeA.PNG",
+  "Aloë zebrina danyz": "aloeZ.jpg",
+  "Aloë zebrina danyz B": "aloeZ.jpg",
+  "Aloë zebrina danyz W": "aloeZ.jpg",
+  "Alluaudia procera": "alluaudia.jpg",
+  "Astrophytum myriostigma": "myriostigma.PNG",
+  "Baucarnea recurvata": "baucarneaR.jpg",
+  "Espostoa lanata": "espostoaL.jpg",
+  "Espostoopsis dybowskii": "Espostoopsis.jpg",
+  "Euphorbia aeruginosa": "aeruginosa.PNG",
+  "Euphorbia enopla": "enopla.PNG",
+  "Euphorbia loricata": "loricata.PNG",
+  "Euphorbia platyclada": "platlyclada.PNG",
+  "Ferocactus Glaucescens": "ferocactus.PNG",
+  "Lophocereus marginatus": "lophocereus.PNG",
+  "Mammillaria backebergiana": "mammilariaB.PNG",
+  "Myrtillocactus geometrizans": "myrtillocactus.PNG",
+  "Neocardenasia herzogiana": "neocardenasia.PNG",
+  "Parodia leninghausii": "parodiaL.PNG",
+  "Parodia magnifica": "parodiaM.PNG",
+  "Stetsonia coryne": "stetsonia.PNG",
+  "Tephrocactus molinensis": "molinesis.PNG",
+  "Trichocereus pachanoi": "TrichocereusP.jpg",
+  "Weberbauerocereus horridispinum": "Weberbauerocereus.PNG",
+}
+
+function plantImageFile(name: string) {
+  return plantImageFiles[name]
+}
+
 function toleranceColorValue(color: ToleranceColor) {
   return toleranceColorValues.find((option) => option.name === color)?.value ?? "#4f9b63"
 }
@@ -404,7 +435,8 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
       {rows.map((row) => {
         const groupColor = colorForGroup(row.group, orderedGroupNames)
         const isExpanded = query.trim().length > 0 || (expandedGroups[row.group] ?? false)
-        return <div key={row.group} className="border-b last:border-b-0" style={{ borderColor: groupColor.border }}>
+        const hasOpenTolerance = row.plants.some((plant) => plant.id === openTolerancePlantId)
+        return <div key={row.group} className={`relative border-b last:border-b-0 has-[.group\/plant-photo:hover]:z-60 ${hasOpenTolerance ? "z-50" : ""}`} style={{ borderColor: groupColor.border }}>
           <div
             role="button"
             tabIndex={0}
@@ -1077,42 +1109,353 @@ function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpen
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <div role="button" tabIndex={0} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click() } }} style={{ backgroundColor: groupColor.row, borderColor: groupColor.border }} className={`group relative grid w-full gap-4 border-t px-1 py-4 text-left transition-colors hover:brightness-110 sm:items-center grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)] ${isToleranceOpen ? "z-30" : ""}`}>
-          <div className="flex min-w-0 items-center gap-3"><div className="relative shrink-0"><button type="button" aria-label={`Change ${season} overwatering tolerance for ${plant.name}`} title="Change overwatering tolerance" onClick={(event) => { event.stopPropagation(); setIsToleranceOpen((open) => !open) }} onKeyDown={(event) => event.stopPropagation()} className="flex size-9 items-center justify-center rounded-full bg-[#dfe9d7] text-[#315d42]" style={{ border: `3px solid ${toleranceColorValue(toleranceColor)}` }}><Sprout className="size-4" /></button>{isToleranceOpen ? <div role="dialog" aria-label="Overwatering tolerance" onClick={(event) => event.stopPropagation()} className="absolute left-0 top-11 z-40 w-64 rounded-lg border border-[#cbdac8] bg-[#fbfcf8] p-2.5 text-[#1f3428] shadow-[0_12px_30px_rgba(15,16,19,0.24)]"><p className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6f896f]">Overwatering tolerance</p><p className="px-1 pt-0.5 text-xs text-[#78847a]">{season === "winter" ? "Winter" : "Summer"} setting</p><div className="mt-2 space-y-1">{toleranceColorValues.map((option) => { const isSelected = option.name === toleranceColor; return <button key={option.name} type="button" aria-label={option.label} title={option.label} onClick={() => { void saveToleranceColor(option.name) }} className={`flex h-9 w-full items-center justify-between gap-3 rounded-md px-2 text-left text-xs font-medium transition-colors ${isSelected ? "bg-[#e7ece4] text-[#1f3428]" : "text-[#55705a] hover:bg-[#eef3eb]"}`}><span className="flex items-center gap-2"><span className="size-4 shrink-0 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: option.value, boxShadow: `0 0 0 1px ${option.value}` }} /><span className="capitalize">{option.name}</span></span><span className="ml-auto text-[11px] font-normal text-[#78847a]">{option.label}</span>{isSelected ? <Check className="size-3.5 shrink-0 text-[#315d42]" /> : null}</button> })}</div></div> : null}</div><div className="min-w-0"><p className="truncate font-semibold text-[#1f3428]">{plant.name}</p></div></div>
-          {plant.group === "Unassigned" ? <div className="col-span-2 flex min-w-0 items-center gap-3">
-            <div className="flex shrink-0 items-center gap-2 text-sm">
-              <div className="flex w-[5.25rem] shrink-0 items-center gap-1.5">
-                <MondayCalendar value={dateInputValue(lastWateredDate) || null} onChange={async (value) => { await onLastWateredUpdated?.(value ? parseInputDate(value) : null) }} compact ariaLabel={`Set last watered date for ${plant.name}`} />
-                <span className="font-bold tabular-nums text-white">{lastWateredDate ? formatScheduleDate(lastWateredDate) : "Not recorded"}</span>
+        <div
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.currentTarget.click();
+            }
+          }}
+          style={{
+            backgroundColor: groupColor.row,
+            borderColor: groupColor.border,
+          }}
+          className={`group relative grid w-full gap-4 border-t px-1 py-4 text-left transition-colors hover:z-60 hover:brightness-110 sm:items-center grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)] ${isToleranceOpen ? "z-50" : ""}`}
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="group/plant-photo relative shrink-0">
+              <button
+                type="button"
+                aria-label={`Change ${season} overwatering tolerance for ${plant.name}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsToleranceOpen((open) => !open);
+                }}
+                onKeyDown={(event) => event.stopPropagation()}
+                className="flex size-9 items-center justify-center rounded-full bg-[#dfe9d7] text-[#315d42]"
+                style={{
+                  border: `3px solid ${toleranceColorValue(toleranceColor)}`,
+                }}
+              >
+                {plantImageFile(plant.name) ? (
+                  <img
+                    src={`/api/plant-images/${encodeURIComponent(plantImageFile(plant.name)!)}`}
+                    alt=""
+                    className="size-full rounded-full object-cover"
+                  />
+                ) : (
+                  <Sprout className="size-4" />
+                )}
+              </button>
+              {plantImageFile(plant.name) && !isToleranceOpen ? (
+                <div className="pointer-events-none absolute left-11 top-0 z-50 hidden w-40 overflow-hidden rounded-lg border-4 bg-[#fbfcf8] p-0 group-hover/plant-photo:block group-focus-within/plant-photo:block" style={{ borderColor: toleranceColorValue(toleranceColor) }}>
+                  <img
+                    src={`/api/plant-images/${encodeURIComponent(plantImageFile(plant.name)!)}`}
+                    alt={`${plant.name} cactus preview`}
+                    className="aspect-square w-full rounded-md object-cover"
+                  />
+                </div>
+              ) : null}
+              {isToleranceOpen ? (
+                <div
+                  role="dialog"
+                  aria-label="Overwatering tolerance"
+                  onClick={(event) => event.stopPropagation()}
+                  className="absolute left-0 top-11 z-40 w-64 rounded-lg border border-[#cbdac8] bg-[#fbfcf8] p-2.5 text-[#1f3428] shadow-[0_12px_30px_rgba(15,16,19,0.24)]"
+                >
+                  <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6f896f]">
+                    Overwatering tolerance
+                  </p>
+                  <p className="px-1 pt-0.5 text-xs text-[#78847a]">
+                    {season === "winter" ? "Winter" : "Summer"} setting
+                  </p>
+                  <div className="mt-2 space-y-1">
+                    {toleranceColorValues.map((option) => {
+                      const isSelected = option.name === toleranceColor;
+                      return (
+                        <button
+                          key={option.name}
+                          type="button"
+                          aria-label={option.label}
+                          title={option.label}
+                          onClick={() => {
+                            void saveToleranceColor(option.name);
+                          }}
+                          className={`flex h-9 w-full items-center justify-between gap-3 rounded-md px-2 text-left text-xs font-medium transition-colors ${isSelected ? "bg-[#e7ece4] text-[#1f3428]" : "text-[#55705a] hover:bg-[#eef3eb]"}`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="size-4 shrink-0 rounded-full border-2 border-white shadow-sm"
+                              style={{
+                                backgroundColor: option.value,
+                                boxShadow: `0 0 0 1px ${option.value}`,
+                              }}
+                            />
+                            <span className="capitalize">{option.name}</span>
+                          </span>
+                          <span className="ml-auto text-[11px] font-normal text-[#78847a]">
+                            {option.label}
+                          </span>
+                          {isSelected ? (
+                            <Check className="size-3.5 shrink-0 text-[#315d42]" />
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-[#1f3428]">
+                {plant.name}
+              </p>
+            </div>
+          </div>
+          {plant.group === "Unassigned" ? (
+            <div className="col-span-2 flex min-w-0 items-center gap-3">
+              <div className="flex shrink-0 items-center gap-2 text-sm">
+                <div className="flex w-[5.25rem] shrink-0 items-center gap-1.5">
+                  <MondayCalendar
+                    value={dateInputValue(lastWateredDate) || null}
+                    onChange={async (value) => {
+                      await onLastWateredUpdated?.(
+                        value ? parseInputDate(value) : null,
+                      );
+                    }}
+                    compact
+                    ariaLabel={`Set last watered date for ${plant.name}`}
+                  />
+                  <span className="font-bold tabular-nums text-white">
+                    {lastWateredDate
+                      ? formatScheduleDate(lastWateredDate)
+                      : "Not recorded"}
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async (event) => {
+                    event.stopPropagation();
+                    await onLastWateredUpdated?.(
+                      new Date(
+                        Date.UTC(
+                          new Date().getFullYear(),
+                          new Date().getMonth(),
+                          new Date().getDate(),
+                        ),
+                      ),
+                    );
+                  }}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  className="h-7 shrink-0 border-[#cbdac8] px-2 text-xs text-[#315d42] hover:bg-[#eef3eb]"
+                >
+                  Water now
+                </Button>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={async (event) => { event.stopPropagation(); await onLastWateredUpdated?.(new Date(Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()))) }} onKeyDown={(event) => event.stopPropagation()} className="h-7 shrink-0 border-[#cbdac8] px-2 text-xs text-[#315d42] hover:bg-[#eef3eb]">Water now</Button>
+              <div className="min-h-px min-w-0 flex-1" />
+              <div className="shrink-0 whitespace-nowrap text-sm font-medium text-[#1f3428]">
+                {nextWatering ? (
+                  <>
+                    <span>{formatScheduleDate(nextWatering)}</span>{" "}
+                    <strong className="font-bold text-[#315d42]">
+                      ({daysFromToday(nextWatering) > 0 ? "+" : ""}
+                      {daysFromToday(nextWatering)} days)
+                    </strong>
+                  </>
+                ) : (
+                  "Set an interval"
+                )}
+              </div>
+              <form
+                onSubmit={saveWeight}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+                className="flex w-20 shrink-0 items-center gap-1"
+              >
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={weight}
+                  onChange={(event) => setWeight(event.target.value)}
+                  onKeyDown={moveToWeightInput}
+                  data-weight-input
+                  aria-label={`Enter current weight for ${plant.name}`}
+                  placeholder="g"
+                  className="h-8 w-full border-white/50 bg-black/20 px-2 text-sm text-white placeholder:text-white/70"
+                  disabled={isSavingWeight}
+                />
+                <button type="submit" className="sr-only">
+                  Save weight
+                </button>
+                {weightError ? (
+                  <span className="text-xs text-white" role="alert">
+                    {weightError}
+                  </span>
+                ) : null}
+              </form>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <div className="w-[6.5rem] shrink-0 text-left tabular-nums">
+                  <p className="whitespace-nowrap font-heading text-xl font-bold tracking-tight text-[#1f3428]">
+                    {current.toLocaleString()}
+                    <span className="ml-1 text-sm font-bold text-white">g</span>
+                  </p>
+                  <p className="whitespace-nowrap text-xs font-bold tracking-[0.08em] text-white">
+                    {measuredAge.suffix ? (
+                      <>
+                        <span className="mr-1 inline-flex items-baseline rounded border border-[#b97922] bg-[#d99535] px-1 py-0.5 font-heading text-base leading-none tracking-tight text-[#111318] shadow-[0_2px_8px_rgba(217,149,53,0.22)]">
+                          {measuredAge.value}
+                        </span>
+                        {measuredAge.suffix}
+                      </>
+                    ) : (
+                      measuredAge.value
+                    )}
+                  </p>
+                </div>
+                {plant.history.some((entry) => entry.weight !== null) ? (
+                  <button
+                    type="button"
+                    aria-label={`Remove latest weight for ${plant.name}`}
+                    title="Remove latest weight"
+                    onClick={removeLatestWeight}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    disabled={isRemovingWeight}
+                    className="flex size-6 shrink-0 items-center justify-center rounded-md text-[#aab4aa] transition-colors hover:bg-black/10 hover:text-[#bd5b45] disabled:opacity-50"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label={`Delete ${plant.name}`}
+                    title="Delete plant"
+                    onClick={deletePlant}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    disabled={isDeleting}
+                    className="flex size-6 shrink-0 items-center justify-center rounded-md text-[#aab4aa] transition-colors hover:bg-black/10 hover:text-[#bd5b45] disabled:opacity-50"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                )}
+              </div>
+              <ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" />
             </div>
-            <div className="min-h-px min-w-0 flex-1" />
-            <div className="shrink-0 whitespace-nowrap text-sm font-medium text-[#1f3428]">{nextWatering ? <><span>{formatScheduleDate(nextWatering)}</span> <strong className="font-bold text-[#315d42]">({daysFromToday(nextWatering) > 0 ? "+" : ""}{daysFromToday(nextWatering)} days)</strong></> : "Set an interval"}</div>
-            <form onSubmit={saveWeight} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} className="flex w-20 shrink-0 items-center gap-1"><Input type="text" inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} onKeyDown={moveToWeightInput} data-weight-input aria-label={`Enter current weight for ${plant.name}`} placeholder="g" className="h-8 w-full border-white/50 bg-black/20 px-2 text-sm text-white placeholder:text-white/70" disabled={isSavingWeight} /><button type="submit" className="sr-only">Save weight</button>{weightError ? <span className="text-xs text-white" role="alert">{weightError}</span> : null}</form>
-            <div className="flex shrink-0 items-center gap-0.5">
-              <div className="w-[6.5rem] shrink-0 text-left tabular-nums"><p className="whitespace-nowrap font-heading text-xl font-bold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-sm font-bold text-white">g</span></p><p className="whitespace-nowrap text-xs font-bold tracking-[0.08em] text-white">{measuredAge.suffix ? <><span className="mr-1 inline-flex items-baseline rounded border border-[#b97922] bg-[#d99535] px-1 py-0.5 font-heading text-base leading-none tracking-tight text-[#111318] shadow-[0_2px_8px_rgba(217,149,53,0.22)]">{measuredAge.value}</span>{measuredAge.suffix}</> : measuredAge.value}</p></div>
-              {plant.history.some((entry) => entry.weight !== null) ? <button type="button" aria-label={`Remove latest weight for ${plant.name}`} title="Remove latest weight" onClick={removeLatestWeight} onKeyDown={(event) => event.stopPropagation()} disabled={isRemovingWeight} className="flex size-6 shrink-0 items-center justify-center rounded-md text-[#aab4aa] transition-colors hover:bg-black/10 hover:text-[#bd5b45] disabled:opacity-50"><Trash2 className="size-3.5" /></button> : <button type="button" aria-label={`Delete ${plant.name}`} title="Delete plant" onClick={deletePlant} onKeyDown={(event) => event.stopPropagation()} disabled={isDeleting} className="flex size-6 shrink-0 items-center justify-center rounded-md text-[#aab4aa] transition-colors hover:bg-black/10 hover:text-[#bd5b45] disabled:opacity-50"><Trash2 className="size-3.5" /></button>}
+          ) : (
+            <div className="col-span-2 flex min-w-0 items-center gap-3">
+              <div
+                className="w-[22rem] min-w-0 max-w-[22rem] shrink"
+                role="progressbar"
+                aria-label={`${plant.name} moisture level`}
+                aria-valuemin={plant.minWeight}
+                aria-valuemax={plant.maxWeight}
+                aria-valuenow={current}
+                aria-valuetext={`${percentage}% from dry weight`}
+              >
+                <div className="mb-1 flex justify-between text-xs font-semibold leading-none text-white/80">
+                  <span>{plant.minWeight.toLocaleString()}g</span>
+                  <span>{percentage}%</span>
+                  <span>{plant.maxWeight.toLocaleString()}g</span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-black/20">
+                  <div
+                    className="h-full rounded-full bg-[#dfe9d7] transition-[width]"
+                    style={{ width: `${percentage}%` }}
+                  />
+                </div>
+              </div>
+              <div className="min-h-px min-w-0 flex-1" />
+              <form
+                onSubmit={saveWeight}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+                className="flex w-20 shrink-0 items-center gap-1"
+              >
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={weight}
+                  onChange={(event) => setWeight(event.target.value)}
+                  onKeyDown={moveToWeightInput}
+                  data-weight-input
+                  aria-label={`Enter current weight for ${plant.name}`}
+                  placeholder="g"
+                  className="h-8 w-full border-white/50 bg-black/20 px-2 text-sm text-white placeholder:text-white/70"
+                  disabled={isSavingWeight}
+                />
+                <button type="submit" className="sr-only">
+                  Save weight
+                </button>
+                {weightError ? (
+                  <span className="text-xs text-white" role="alert">
+                    {weightError}
+                  </span>
+                ) : null}
+              </form>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <div className="w-[6.5rem] shrink-0 text-left tabular-nums">
+                  <p className="whitespace-nowrap font-heading text-xl font-bold tracking-tight text-[#1f3428]">
+                    {current.toLocaleString()}
+                    <span className="ml-1 text-sm font-bold text-white">g</span>
+                  </p>
+                  <p className="whitespace-nowrap text-xs font-bold tracking-[0.08em] text-white">
+                    {measuredAge.suffix ? (
+                      <>
+                        <span className="mr-1 inline-flex items-baseline rounded border border-[#b97922] bg-[#d99535] px-1 py-0.5 font-heading text-base leading-none tracking-tight text-[#111318] shadow-[0_2px_8px_rgba(217,149,53,0.22)]">
+                          {measuredAge.value}
+                        </span>
+                        {measuredAge.suffix}
+                      </>
+                    ) : (
+                      measuredAge.value
+                    )}
+                  </p>
+                </div>
+                {plant.history.some((entry) => entry.weight !== null) ? (
+                  <button
+                    type="button"
+                    aria-label={`Remove latest weight for ${plant.name}`}
+                    title="Remove latest weight"
+                    onClick={removeLatestWeight}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    disabled={isRemovingWeight}
+                    className="flex size-6 shrink-0 items-center justify-center rounded-md text-[#aab4aa] transition-colors hover:bg-black/10 hover:text-[#bd5b45] disabled:opacity-50"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label={`Delete ${plant.name}`}
+                    title="Delete plant"
+                    onClick={deletePlant}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    disabled={isDeleting}
+                    className="flex size-6 shrink-0 items-center justify-center rounded-md text-[#aab4aa] transition-colors hover:bg-black/10 hover:text-[#bd5b45] disabled:opacity-50"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                )}
+              </div>
+              <ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" />
             </div>
-            <ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" />
-          </div> : <div className="col-span-2 flex min-w-0 items-center gap-3">
-            <div className="w-[22rem] min-w-0 max-w-[22rem] shrink" role="progressbar" aria-label={`${plant.name} moisture level`} aria-valuemin={plant.minWeight} aria-valuemax={plant.maxWeight} aria-valuenow={current} aria-valuetext={`${percentage}% from dry weight`}>
-              <div className="mb-1 flex justify-between text-xs font-semibold leading-none text-white/80"><span>{plant.minWeight.toLocaleString()}g</span><span>{percentage}%</span><span>{plant.maxWeight.toLocaleString()}g</span></div>
-              <div className="h-2.5 overflow-hidden rounded-full bg-black/20"><div className="h-full rounded-full bg-[#dfe9d7] transition-[width]" style={{ width: `${percentage}%` }} /></div>
-            </div>
-            <div className="min-h-px min-w-0 flex-1" />
-            <form onSubmit={saveWeight} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} className="flex w-20 shrink-0 items-center gap-1"><Input type="text" inputMode="decimal" value={weight} onChange={(event) => setWeight(event.target.value)} onKeyDown={moveToWeightInput} data-weight-input aria-label={`Enter current weight for ${plant.name}`} placeholder="g" className="h-8 w-full border-white/50 bg-black/20 px-2 text-sm text-white placeholder:text-white/70" disabled={isSavingWeight} /><button type="submit" className="sr-only">Save weight</button>{weightError ? <span className="text-xs text-white" role="alert">{weightError}</span> : null}</form>
-            <div className="flex shrink-0 items-center gap-0.5">
-              <div className="w-[6.5rem] shrink-0 text-left tabular-nums"><p className="whitespace-nowrap font-heading text-xl font-bold tracking-tight text-[#1f3428]">{current.toLocaleString()}<span className="ml-1 text-sm font-bold text-white">g</span></p><p className="whitespace-nowrap text-xs font-bold tracking-[0.08em] text-white">{measuredAge.suffix ? <><span className="mr-1 inline-flex items-baseline rounded border border-[#b97922] bg-[#d99535] px-1 py-0.5 font-heading text-base leading-none tracking-tight text-[#111318] shadow-[0_2px_8px_rgba(217,149,53,0.22)]">{measuredAge.value}</span>{measuredAge.suffix}</> : measuredAge.value}</p></div>
-              {plant.history.some((entry) => entry.weight !== null) ? <button type="button" aria-label={`Remove latest weight for ${plant.name}`} title="Remove latest weight" onClick={removeLatestWeight} onKeyDown={(event) => event.stopPropagation()} disabled={isRemovingWeight} className="flex size-6 shrink-0 items-center justify-center rounded-md text-[#aab4aa] transition-colors hover:bg-black/10 hover:text-[#bd5b45] disabled:opacity-50"><Trash2 className="size-3.5" /></button> : <button type="button" aria-label={`Delete ${plant.name}`} title="Delete plant" onClick={deletePlant} onKeyDown={(event) => event.stopPropagation()} disabled={isDeleting} className="flex size-6 shrink-0 items-center justify-center rounded-md text-[#aab4aa] transition-colors hover:bg-black/10 hover:text-[#bd5b45] disabled:opacity-50"><Trash2 className="size-3.5" /></button>}
-            </div>
-            <ChevronDown className="size-4 shrink-0 text-[#aab4aa] transition-transform group-hover:translate-y-0.5" />
-          </div>}
+          )}
         </div>
       </DialogTrigger>
-      <PlantHistory plant={plant} onUpdated={onUpdated} onEstimateUpdated={onEstimateUpdated} onWeightsUpdated={onWeightsUpdated} onWeightAdded={onWeightAdded} onDeleted={onDeleted ?? (() => window.location.reload())} onNameUpdated={onNameUpdated ?? (() => window.location.reload())} />
+      <PlantHistory
+        plant={plant}
+        onUpdated={onUpdated}
+        onEstimateUpdated={onEstimateUpdated}
+        onWeightsUpdated={onWeightsUpdated}
+        onWeightAdded={onWeightAdded}
+        onDeleted={onDeleted ?? (() => window.location.reload())}
+        onNameUpdated={onNameUpdated ?? (() => window.location.reload())}
+      />
     </Dialog>
-  )
+  );
 }
 
 function CreatePlantDialog({ onCreated }: { onCreated: (plant: Plant) => void }) {
