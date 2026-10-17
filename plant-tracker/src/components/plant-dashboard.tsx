@@ -1217,7 +1217,7 @@ function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpen
               ) : null}
             </div>
             <div className="flex min-w-0 items-center">
-              <p className="truncate font-semibold text-[#1f3428]">
+              <p className="line-clamp-2 font-semibold text-[#1f3428]">
                 {plant.name}
               </p>
             </div>
