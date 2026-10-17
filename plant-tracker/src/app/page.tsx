@@ -70,6 +70,7 @@ export default async function Home() {
         return {
           id: plant.id,
           name: plant.name,
+          imageUrl: plant.imageUrl,
           group: plant.wateringGroup?.name ?? "Unassigned",
           wateringInterval: plant.wateringGroup?.intervalDays ?? null,
           lastWatered: (plant.wateringGroup?.intervalDays === null ? plant.summerLastWateredAt : plant.wateringGroup?.lastWateredAt)?.toISOString() ?? null,
