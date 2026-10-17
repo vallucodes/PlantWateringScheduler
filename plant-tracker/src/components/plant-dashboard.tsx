@@ -426,13 +426,13 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
         <div className="flex items-center gap-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#9aa39b]" />
-            <Input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search plants" className="h-9 w-full border-[#d8dfd5] bg-[#f7f9f5] pl-9 text-sm md:w-44" />
+            <Input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search plants" className="h-9 w-44 border-[#d8dfd5] bg-[#f7f9f5] pl-9 text-sm" />
             {query && <button type="button" aria-label="Clear search" onClick={() => onQueryChange("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9aa39b]"><X className="size-3.5" /></button>}
           </div>
           <Button type="button" variant="outline" size="icon" aria-label="Add plant" className="h-9 w-9 border-[#315d42] bg-[#315d42] text-[#f4f1e8] hover:border-[#1f3428] hover:bg-[#1f3428] hover:text-white"><Plus className="size-4" strokeWidth={2.5} /></Button>
         </div>
       </div>
-      <div className="grid grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] items-center gap-4 border-b border-[#e0e6dd] px-1 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9aa39b] sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)]">
+      <div className="grid grid-cols-[minmax(8rem,1.1fr)_minmax(11rem,1fr)_minmax(16rem,1.2fr)] items-center gap-4 border-b border-[#e0e6dd] px-1 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#9aa39b]">
         <span>Watering group</span>
         <span>Last watered</span>
         <NextWateringColumn>Next watering</NextWateringColumn>
@@ -454,7 +454,7 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
               }
             }}
             style={{ backgroundColor: groupColor.row }}
-            className="grid cursor-pointer grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] items-center gap-4 px-1 py-3.5 text-sm transition-colors hover:brightness-110 sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)]"
+            className="grid h-[68px] min-h-[68px] max-h-[68px] cursor-pointer grid-cols-[minmax(8rem,1.1fr)_minmax(11rem,1fr)_minmax(16rem,1.2fr)] items-center gap-4 px-1 py-3.5 text-sm transition-colors hover:brightness-110"
           >
           <div>
             <p style={{ color: groupColor.accent }} className="flex items-center gap-2 font-heading text-4xl font-bold tracking-tight"><ChevronDown className={`size-4 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />{row.group}</p>
@@ -1127,7 +1127,7 @@ function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpen
             backgroundColor: groupColor.row,
             borderColor: groupColor.border,
           }}
-          className={`plant-card-row group relative grid w-full gap-4 border-t px-1 py-1 text-left transition-colors hover:brightness-110 items-center grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)] ${isToleranceOpen ? "z-50" : ""}`}
+          className={`plant-card-row group relative grid h-[65px] min-h-[65px] max-h-[65px] w-full gap-4 border-t px-1 py-1 text-left transition-colors hover:brightness-110 items-center grid-cols-[minmax(8rem,1.1fr)_minmax(11rem,1fr)_minmax(16rem,1.2fr)] ${isToleranceOpen ? "z-50" : ""}`}
         >
           <div className="flex min-w-0 items-stretch gap-3">
             <div className="relative flex shrink-0 self-stretch">
@@ -1195,7 +1195,7 @@ function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpen
               ) : null}
             </div>
             <div className="plant-image-trigger group/plant-image relative shrink-0">
-              <div className="flex size-12 items-center justify-center overflow-hidden rounded-md bg-black/10 sm:size-14">
+              <div className="flex size-14 items-center justify-center overflow-hidden rounded-md bg-black/10">
                 {plantImageFile(plant) ? (
                   <img
                     src={`/api/plant-images/${encodeURIComponent(plantImageFile(plant)!)}`}
@@ -1649,14 +1649,14 @@ export default function PlantDashboard({ plants, groupDates, lastUpdated, initia
     <main className="report-shell min-h-screen bg-[#0f1013] text-[#e7e9ed]">
       <CreatePlantDialog onCreated={(plant) => setPlantList((current) => [plant, ...current])} />
       <div className="mx-auto flex min-h-screen max-w-[1200px] flex-col bg-[#21242c] shadow-[0_0_80px_rgba(0,0,0,0.24)]">
-        <header className="flex items-center justify-between px-5 py-4 sm:px-10 lg:px-14"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-[#315d42] text-[#e8f2e0]"><Droplets className="size-4" /></div><span className="font-heading text-lg font-semibold tracking-tight">verdant</span></div><div className="flex items-center gap-2"><span className="hidden text-xs text-[#78847a] sm:inline">Last measurement {lastUpdated}</span><AdminAccess /></div></header>
-        <section className="mx-5 border-y border-[#e0e6dd] px-0 pb-3 pt-6 sm:mx-10 lg:mx-14 lg:pb-4 lg:pt-8"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="whitespace-nowrap font-heading text-4xl font-semibold tracking-[-0.04em] text-[#1f3428] sm:text-3xl">A little care goes a long way.</h1></div></section>
-        <section className="flex-1 px-5 pb-7 pt-0 sm:px-10 lg:px-14 lg:pb-9"><WateringSchedule plants={plantList} groupDates={groupDates} query={query} initialSeason={initialSeason} onQueryChange={setQuery} onSeasonChanged={setSeasonSetting} onGroupWatered={waterGroup} onLastWateredChanged={saveLastWatered} onPlantDeleted={(plantId) => setPlantList((current) => current.filter((plant) => plant.id !== plantId))} onWeightsUpdated={(plantId, minWeight, maxWeight) => setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, minWeight, maxWeight } : plant))} onToleranceUpdated={(plantId, season, color) => setPlantList((current) => current.map((plant) => plant.id === plantId ? season === "winter" ? { ...plant, winterToleranceColor: color } : { ...plant, summerToleranceColor: color } : plant))} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
+        <header className="flex items-center justify-between px-[50px] py-4"><div className="flex items-center gap-3"><div className="flex size-9 items-center justify-center rounded-xl bg-[#315d42] text-[#e8f2e0]"><Droplets className="size-4" /></div><span className="font-heading text-lg font-semibold tracking-tight">verdant</span></div><div className="flex items-center gap-2"><span className="hidden text-xs text-[#78847a] sm:inline">Last measurement {lastUpdated}</span><AdminAccess /></div></header>
+        <section className="mx-[50px] border-y border-[#e0e6dd] px-0 pb-4 pt-8"><div><p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#6f896f]"><SunMedium className="size-3.5" /> {lastUpdated}</p><h1 className="whitespace-nowrap font-heading text-3xl font-semibold tracking-[-0.04em] text-[#1f3428]">A little care goes a long way.</h1></div></section>
+        <section className="flex-1 px-[50px] pb-[clamp(1.75rem,1.25rem+1vw,2.25rem)] pt-0"><WateringSchedule plants={plantList} groupDates={groupDates} query={query} initialSeason={initialSeason} onQueryChange={setQuery} onSeasonChanged={setSeasonSetting} onGroupWatered={waterGroup} onLastWateredChanged={saveLastWatered} onPlantDeleted={(plantId) => setPlantList((current) => current.filter((plant) => plant.id !== plantId))} onWeightsUpdated={(plantId, minWeight, maxWeight) => setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, minWeight, maxWeight } : plant))} onToleranceUpdated={(plantId, season, color) => setPlantList((current) => current.map((plant) => plant.id === plantId ? season === "winter" ? { ...plant, winterToleranceColor: color } : { ...plant, summerToleranceColor: color } : plant))} onPlantUpdated={(plantId, season, nextGroup, wateringInterval) => setPlantList((current) => current.map((plant) => {
           if (plant.id !== plantId) return plant
           if (season === "winter") return { ...plant, winterGroup: nextGroup, winterWateringInterval: wateringInterval }
           return { ...plant, group: nextGroup, wateringInterval, room: wateringInterval ? `Every ${wateringInterval} days` : "No schedule" }
         }))} onEstimatedUpdated={(plantId, interval) => setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, estimatedWateringInterval: interval } : plant))} onWeightAdded={addWeight} onWeightRemoved={removeWeight} /></section>
-        <footer className="flex flex-col justify-between gap-3 border-t border-[#e0e6dd] px-5 py-5 text-xs text-[#8b968d] sm:flex-row sm:px-10 lg:px-14"><p className="flex items-center gap-2"><CalendarDays className="size-3.5" /> Weight history is your most reliable watering signal.</p><p className="flex items-center gap-1 text-[#6f896f]"><ArrowUpRight className="size-3.5" /> All systems growing</p></footer>
+        <footer className="flex flex-col justify-between gap-3 border-t border-[#e0e6dd] px-[50px] py-5 text-xs text-[#8b968d] sm:flex-row"><p className="flex items-center gap-2"><CalendarDays className="size-3.5" /> Weight history is your most reliable watering signal.</p><p className="flex items-center gap-1 text-[#6f896f]"><ArrowUpRight className="size-3.5" /> All systems growing</p></footer>
       </div>
     </main>
   )
