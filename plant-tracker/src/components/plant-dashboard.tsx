@@ -596,8 +596,10 @@ function PlantHistory({ plant, onUpdated, onEstimateUpdated, onWeightsUpdated, o
   const dataMax = Math.max(plant.maxWeight, ...visibleWeights)
   const weightAxis = getWeightAxis(dataMin, dataMax)
   const today = new Date()
-  const chartEndDate = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+  const todayDate = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
   const historyChartData = visibleHistory.map((entry) => ({ ...entry, chartDate: parseChartDate(entry.date) }))
+  const isFullHistoryRange = range.startIndex === 0 && range.endIndex >= plant.history.length - 1
+  const chartEndDate = isFullHistoryRange ? todayDate : historyChartData.at(-1)?.chartDate ?? todayDate
   const chartStartDate = historyChartData[0]?.chartDate ?? chartEndDate
   const chartDayCount = Math.max(1, Math.floor((chartEndDate - chartStartDate) / 86400000) + 1)
   const chartData = Array.from({ length: chartDayCount }, (_, index) => {
