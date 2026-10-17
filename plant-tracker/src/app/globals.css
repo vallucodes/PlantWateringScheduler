@@ -169,6 +169,15 @@
   border-color: #2a2f38 !important;
 }
 
+.report-shell .plant-group-row:has(.plant-image-trigger:hover) {
+  position: relative;
+  z-index: 100;
+}
+
+.report-shell .plant-card-row:has(.plant-image-trigger:hover) {
+  z-index: 100;
+}
+
 .report-shell [class*="text-[#bd5b45]"],
 .report-shell [class*="text-[#cf7459]"] {
   color: #d06a32 !important;

@@ -101,8 +101,13 @@ const plantImageFiles: Record<string, string> = {
   "Weberbauerocereus horridispinum": "Weberbauerocereus.PNG",
 }
 
-function plantImageFile(name: string) {
-  return plantImageFiles[name]
+const plantImageFilesById: Record<number, string> = {
+  15: "mammilariaB.PNG",
+  16: "mammilariaS.jpg",
+}
+
+function plantImageFile(plant: Pick<Plant, "id" | "name">) {
+  return plantImageFilesById[plant.id] ?? plantImageFiles[plant.name]
 }
 
 function toleranceColorValue(color: ToleranceColor) {
@@ -436,7 +441,7 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
         const groupColor = colorForGroup(row.group, orderedGroupNames)
         const isExpanded = query.trim().length > 0 || (expandedGroups[row.group] ?? false)
         const hasOpenTolerance = row.plants.some((plant) => plant.id === openTolerancePlantId)
-        return <div key={row.group} className={`relative border-b last:border-b-0 has-[.group\/plant-photo:hover]:z-60 ${hasOpenTolerance ? "z-50" : ""}`} style={{ borderColor: groupColor.border }}>
+        return <div key={row.group} className={`plant-group-row relative border-b last:border-b-0 ${hasOpenTolerance ? "z-50" : ""}`} style={{ borderColor: groupColor.border }}>
           <div
             role="button"
             tabIndex={0}
@@ -1122,42 +1127,24 @@ function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpen
             backgroundColor: groupColor.row,
             borderColor: groupColor.border,
           }}
-          className={`group relative grid w-full gap-4 border-t px-1 py-4 text-left transition-colors hover:z-60 hover:brightness-110 sm:items-center grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)] ${isToleranceOpen ? "z-50" : ""}`}
+          className={`plant-card-row group relative grid w-full gap-4 border-t px-1 py-1 text-left transition-colors hover:brightness-110 items-center grid-cols-[minmax(7rem,1.1fr)_minmax(8rem,1fr)_minmax(8rem,1.2fr)] sm:grid-cols-[minmax(8rem,1.1fr)_minmax(8rem,1fr)_minmax(10rem,1.2fr)] ${isToleranceOpen ? "z-50" : ""}`}
         >
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="group/plant-photo relative shrink-0">
+          <div className="flex min-w-0 items-stretch gap-3">
+            <div className="relative flex shrink-0 self-stretch">
               <button
                 type="button"
                 aria-label={`Change ${season} overwatering tolerance for ${plant.name}`}
+                title="Change overwatering tolerance"
                 onClick={(event) => {
                   event.stopPropagation();
                   setIsToleranceOpen((open) => !open);
                 }}
                 onKeyDown={(event) => event.stopPropagation()}
-                className="flex size-9 items-center justify-center rounded-full bg-[#dfe9d7] text-[#315d42]"
+                className="h-full w-3 rounded-sm transition-colors hover:brightness-125"
                 style={{
-                  border: `3px solid ${toleranceColorValue(toleranceColor)}`,
+                  backgroundColor: toleranceColorValue(toleranceColor),
                 }}
-              >
-                {plantImageFile(plant.name) ? (
-                  <img
-                    src={`/api/plant-images/${encodeURIComponent(plantImageFile(plant.name)!)}`}
-                    alt=""
-                    className="size-full rounded-full object-cover"
-                  />
-                ) : (
-                  <Sprout className="size-4" />
-                )}
-              </button>
-              {plantImageFile(plant.name) && !isToleranceOpen ? (
-                <div className="pointer-events-none absolute left-11 top-0 z-50 hidden w-40 overflow-hidden rounded-lg border-4 bg-[#fbfcf8] p-0 group-hover/plant-photo:block group-focus-within/plant-photo:block" style={{ borderColor: toleranceColorValue(toleranceColor) }}>
-                  <img
-                    src={`/api/plant-images/${encodeURIComponent(plantImageFile(plant.name)!)}`}
-                    alt={`${plant.name} cactus preview`}
-                    className="aspect-square w-full rounded-md object-cover"
-                  />
-                </div>
-              ) : null}
+              />
               {isToleranceOpen ? (
                 <div
                   role="dialog"
@@ -1187,10 +1174,9 @@ function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpen
                         >
                           <span className="flex items-center gap-2">
                             <span
-                              className="size-4 shrink-0 rounded-full border-2 border-white shadow-sm"
+                              className="size-4 shrink-0 rounded-full border border-white"
                               style={{
                                 backgroundColor: option.value,
-                                boxShadow: `0 0 0 1px ${option.value}`,
                               }}
                             />
                             <span className="capitalize">{option.name}</span>
@@ -1208,7 +1194,29 @@ function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpen
                 </div>
               ) : null}
             </div>
-            <div className="min-w-0">
+            <div className="plant-image-trigger group/plant-image relative shrink-0">
+              <div className="flex size-12 items-center justify-center overflow-hidden rounded-md bg-black/10 sm:size-14">
+                {plantImageFile(plant) ? (
+                  <img
+                    src={`/api/plant-images/${encodeURIComponent(plantImageFile(plant)!)}`}
+                    alt={`${plant.name} plant`}
+                    className="size-full object-cover"
+                  />
+                ) : (
+                  <Sprout className="size-7 text-[#dfe9d7]" />
+                )}
+              </div>
+              {plantImageFile(plant) ? (
+                <div className="pointer-events-auto absolute left-full top-1/2 z-50 hidden w-56 -translate-y-1/2 overflow-hidden rounded-lg border-4 bg-[#fbfcf8] group-hover/plant-image:block" style={{ borderColor: toleranceColorValue(toleranceColor) }}>
+                  <img
+                    src={`/api/plant-images/${encodeURIComponent(plantImageFile(plant)!)}`}
+                    alt={`${plant.name} plant preview`}
+                    className="aspect-square w-full object-cover"
+                  />
+                </div>
+              ) : null}
+            </div>
+            <div className="flex min-w-0 items-center">
               <p className="truncate font-semibold text-[#1f3428]">
                 {plant.name}
               </p>
