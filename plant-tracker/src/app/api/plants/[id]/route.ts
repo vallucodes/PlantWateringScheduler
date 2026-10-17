@@ -12,6 +12,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const hasName = Object.prototype.hasOwnProperty.call(body ?? {}, "name")
   const hasInterval = Object.prototype.hasOwnProperty.call(body ?? {}, "intervalDays")
   const hasWinterInterval = Object.prototype.hasOwnProperty.call(body ?? {}, "winterIntervalDays")
+  const hasEstimatedInterval = Object.prototype.hasOwnProperty.call(body ?? {}, "estimatedWateringInterval")
   const hasMinWeight = Object.prototype.hasOwnProperty.call(body ?? {}, "minWeight")
   const hasMaxWeight = Object.prototype.hasOwnProperty.call(body ?? {}, "maxWeight")
   const hasToleranceColor = Object.prototype.hasOwnProperty.call(body ?? {}, "toleranceColor")
@@ -19,6 +20,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const name = typeof body?.name === "string" ? body.name.trim() : ""
   const rawInterval = body?.intervalDays
   const rawWinterInterval = body?.winterIntervalDays
+  const rawEstimatedInterval = body?.estimatedWateringInterval
   const rawMinWeight = body?.minWeight
   const rawMaxWeight = body?.maxWeight
   const parseWeight = (value: unknown) => value === "" || value === null || value === undefined ? null : Number(value)
@@ -28,7 +30,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const toleranceColor = body?.toleranceColor
   const winterToleranceColor = body?.winterToleranceColor
 
-  if (!hasName && !hasInterval && !hasWinterInterval && !hasMinWeight && !hasMaxWeight && !hasToleranceColor && !hasWinterToleranceColor) return Response.json({ error: "No plant changes were provided." }, { status: 400 })
+  if (!hasName && !hasInterval && !hasWinterInterval && !hasEstimatedInterval && !hasMinWeight && !hasMaxWeight && !hasToleranceColor && !hasWinterToleranceColor) return Response.json({ error: "No plant changes were provided." }, { status: 400 })
   if (hasName && !name) return Response.json({ error: "Plant name is required." }, { status: 400 })
   if (hasToleranceColor && (typeof toleranceColor !== "string" || !toleranceColors.includes(toleranceColor as typeof toleranceColors[number]))) return Response.json({ error: "Invalid summer tolerance color." }, { status: 400 })
   if (hasWinterToleranceColor && (typeof winterToleranceColor !== "string" || !toleranceColors.includes(winterToleranceColor as typeof toleranceColors[number]))) return Response.json({ error: "Invalid winter tolerance color." }, { status: 400 })
@@ -38,6 +40,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   if (hasWinterInterval && rawWinterInterval !== null && (!Number.isInteger(rawWinterInterval) || rawWinterInterval < 1 || rawWinterInterval > 365)) {
     return Response.json({ error: "Winter interval must be a whole number from 1 to 365 days." }, { status: 400 })
+  }
+  if (hasEstimatedInterval && rawEstimatedInterval !== null && (!Number.isInteger(rawEstimatedInterval) || rawEstimatedInterval < 1 || rawEstimatedInterval > 365)) {
+    return Response.json({ error: "Estimated interval must be a whole number from 1 to 365 days." }, { status: 400 })
   }
   if ([minWeight, maxWeight].some((weight) => weight !== undefined && weight !== null && (!Number.isFinite(weight) || weight < 0))) {
     return Response.json({ error: "Weights must be zero or greater." }, { status: 400 })
@@ -56,13 +61,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       where: { id: plantId },
       data: {
         ...(hasName ? { name } : {}),
+        ...(hasEstimatedInterval ? { estimatedWateringInterval: rawEstimatedInterval as number | null } : {}),
         ...(hasMinWeight ? { minWeight } : {}),
         ...(hasMaxWeight ? { maxWeight } : {}),
         ...(hasToleranceColor ? { summerToleranceColor: toleranceColor as string } : {}),
         ...(hasWinterToleranceColor ? { winterToleranceColor: winterToleranceColor as string } : {}),
       },
     })
-    return Response.json({ name: updatedPlant.name, minWeight: updatedPlant.minWeight, maxWeight: updatedPlant.maxWeight, summerToleranceColor: updatedPlant.summerToleranceColor, winterToleranceColor: updatedPlant.winterToleranceColor })
+    return Response.json({ name: updatedPlant.name, estimatedWateringInterval: updatedPlant.estimatedWateringInterval, minWeight: updatedPlant.minWeight, maxWeight: updatedPlant.maxWeight, summerToleranceColor: updatedPlant.summerToleranceColor, winterToleranceColor: updatedPlant.winterToleranceColor })
   }
 
   const [currentGroup, currentWinterGroup] = await Promise.all([
@@ -86,11 +92,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   await prisma.plant.update({
     where: { id: plantId },
-    data: { ...(hasName ? { name } : {}), ...(hasMinWeight ? { minWeight } : {}), ...(hasMaxWeight ? { maxWeight } : {}), ...(hasToleranceColor ? { summerToleranceColor: toleranceColor as string } : {}), ...(hasWinterToleranceColor ? { winterToleranceColor: winterToleranceColor as string } : {}), wateringGroupId: wateringGroup.id, winterWateringGroupId: winterWateringGroup.id },
+    data: { ...(hasName ? { name } : {}), ...(hasEstimatedInterval ? { estimatedWateringInterval: rawEstimatedInterval as number | null } : {}), ...(hasMinWeight ? { minWeight } : {}), ...(hasMaxWeight ? { maxWeight } : {}), ...(hasToleranceColor ? { summerToleranceColor: toleranceColor as string } : {}), ...(hasWinterToleranceColor ? { winterToleranceColor: winterToleranceColor as string } : {}), wateringGroupId: wateringGroup.id, winterWateringGroupId: winterWateringGroup.id },
   })
 
   const selectedGroup = hasWinterInterval && !hasInterval ? winterWateringGroup : wateringGroup
-  return Response.json({ name: hasName ? name : plant.name, minWeight: nextMinWeight, maxWeight: nextMaxWeight, season: hasWinterInterval && !hasInterval ? "winter" : "summer", group: selectedGroup.name === "Winter Unassigned" ? "Unassigned" : selectedGroup.name, wateringInterval: selectedGroup.intervalDays, winterWateringInterval: winterWateringGroup.intervalDays })
+  return Response.json({ name: hasName ? name : plant.name, estimatedWateringInterval: hasEstimatedInterval ? rawEstimatedInterval : plant.estimatedWateringInterval, minWeight: nextMinWeight, maxWeight: nextMaxWeight, season: hasWinterInterval && !hasInterval ? "winter" : "summer", group: selectedGroup.name === "Winter Unassigned" ? "Unassigned" : selectedGroup.name, wateringInterval: selectedGroup.intervalDays, winterWateringInterval: winterWateringGroup.intervalDays })
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
