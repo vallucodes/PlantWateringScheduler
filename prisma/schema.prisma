@@ -26,6 +26,7 @@ model WateringGroup {
 model Plant {
   id                Int           @id
   name              String
+  imageUrl          String?
   minWeight         Float?
   maxWeight         Float?
   sourceRow         Int           @unique
