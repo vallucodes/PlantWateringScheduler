@@ -35,12 +35,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const plant = await prisma.plant.findUnique({ where: { id: plantId }, select: { id: true, imageUrl: true } })
   if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
   if (plant.imageUrl) return Response.json({ error: "This plant already has an uploaded image." }, { status: 409 })
+  const hasReadWriteToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN)
+  const hasOidcCredentials = Boolean(process.env.VERCEL_OIDC_TOKEN && process.env.BLOB_STORE_ID)
+  if (!hasReadWriteToken && !hasOidcCredentials) {
+    return Response.json({ error: "Vercel Blob credentials are missing. Add the Blob environment variables to .env.local and restart the dev server." }, { status: 503 })
+  }
 
-  const blob = await put(`plants/${plantId}/plant-image.${imageTypes[file.type]}`, file, {
-    access: "public",
-    addRandomSuffix: true,
-    contentType: file.type,
-  })
+  let blob
+  try {
+    blob = await put(`plants/${plantId}/plant-image.${imageTypes[file.type]}`, file, {
+      access: "public",
+      addRandomSuffix: true,
+      contentType: file.type,
+    })
+  } catch (error) {
+    console.error("Plant image upload to Vercel Blob failed.", error)
+    return Response.json({ error: "Image storage upload failed. Check Blob configuration and server logs." }, { status: 502 })
+  }
 
   await prisma.plant.update({ where: { id: plantId }, data: { imageUrl: blob.url } })
   return Response.json({ imageUrl: blob.url })

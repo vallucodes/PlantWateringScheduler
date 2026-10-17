@@ -1052,11 +1052,12 @@ function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpen
       const formData = new FormData()
       formData.set("file", file)
       const response = await fetch(`/api/plants/${plant.id}/image`, { method: "POST", body: formData })
-      const result = await response.json()
+      const result = await response.json().catch(() => null)
       if (!response.ok) {
-        const message = result.error ?? "Could not upload plant image."
+        const message = typeof result?.error === "string" ? result.error : "Could not upload plant image."
         throw new Error(response.status === 401 ? "Sign in above, then try uploading again." : message)
       }
+      if (typeof result?.imageUrl !== "string") throw new Error("The server did not return the uploaded image URL.")
       onImageUploaded(result.imageUrl)
     } catch (uploadError) {
       setImageUploadError(uploadError instanceof Error ? uploadError.message : "Could not upload plant image.")
