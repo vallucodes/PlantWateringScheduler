@@ -602,9 +602,10 @@ function PlantHistory({ plant, onUpdated, onEstimateUpdated, onWeightsUpdated, o
   const chartEndDate = isFullHistoryRange ? todayDate : historyChartData.at(-1)?.chartDate ?? todayDate
   const chartStartDate = historyChartData[0]?.chartDate ?? chartEndDate
   const chartDayCount = Math.max(1, Math.floor((chartEndDate - chartStartDate) / 86400000) + 1)
+  const historyByChartDate = new Map(historyChartData.map((entry) => [entry.chartDate, entry]))
   const chartData = Array.from({ length: chartDayCount }, (_, index) => {
     const chartDate = chartStartDate + index * 86400000
-    const historyEntry = historyChartData.find((entry) => entry.chartDate === chartDate)
+    const historyEntry = historyByChartDate.get(chartDate)
     return { date: historyEntry?.date ?? "", weight: historyEntry?.weight ?? null, chartDate }
   })
   const monthlyTicks = chartData.filter((entry) => new Date(entry.chartDate).getUTCDate() === 1).map((entry) => entry.chartDate)

@@ -178,6 +178,13 @@
   z-index: 100;
 }
 
+.plant-card-row,
+.plant-card-row button,
+[data-slot="dialog-content"] button {
+  transition-duration: 0ms !important;
+  transition-delay: 0ms !important;
+}
+
 .report-shell [class*="text-[#bd5b45]"],
 .report-shell [class*="text-[#cf7459]"] {
   color: #d06a32 !important;
