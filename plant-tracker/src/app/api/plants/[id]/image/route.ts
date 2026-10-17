@@ -1,4 +1,4 @@
-import { put } from "@vercel/blob"
+import { del, put } from "@vercel/blob"
 import { prisma } from "@/lib/prisma"
 import { requireAdmin } from "@/lib/admin-auth"
 
@@ -15,6 +15,10 @@ async function matchesImageType(file: File) {
   if (file.type === "image/png") return [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, index) => bytes[index] === byte)
   if (file.type === "image/webp") return String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP"
   return false
+}
+
+function hasBlobCredentials() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || (process.env.VERCEL_OIDC_TOKEN && process.env.BLOB_STORE_ID))
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -35,9 +39,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const plant = await prisma.plant.findUnique({ where: { id: plantId }, select: { id: true, imageUrl: true } })
   if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
   if (plant.imageUrl) return Response.json({ error: "This plant already has an uploaded image." }, { status: 409 })
-  const hasReadWriteToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN)
-  const hasOidcCredentials = Boolean(process.env.VERCEL_OIDC_TOKEN && process.env.BLOB_STORE_ID)
-  if (!hasReadWriteToken && !hasOidcCredentials) {
+  if (!hasBlobCredentials()) {
     return Response.json({ error: "Vercel Blob credentials are missing. Add the Blob environment variables to .env.local and restart the dev server." }, { status: 503 })
   }
 
@@ -55,4 +57,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   await prisma.plant.update({ where: { id: plantId }, data: { imageUrl: blob.url } })
   return Response.json({ imageUrl: blob.url })
+}
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const unauthorizedResponse = await requireAdmin()
+  if (unauthorizedResponse) return unauthorizedResponse
+
+  const { id } = await params
+  const plantId = Number(id)
+  if (!Number.isInteger(plantId) || plantId < 0) return Response.json({ error: "Invalid plant ID." }, { status: 400 })
+
+  const plant = await prisma.plant.findUnique({ where: { id: plantId }, select: { id: true, imageUrl: true } })
+  if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
+  if (!plant.imageUrl) return Response.json({ error: "This plant has no uploaded image to delete." }, { status: 404 })
+  if (!hasBlobCredentials()) {
+    return Response.json({ error: "Vercel Blob credentials are missing. Add the Blob environment variables to .env.local and restart the dev server." }, { status: 503 })
+  }
+
+  try {
+    await del(plant.imageUrl)
+  } catch (error) {
+    console.error("Plant image deletion from Vercel Blob failed.", error)
+    return Response.json({ error: "Image storage deletion failed. Check Blob configuration and server logs." }, { status: 502 })
+  }
+
+  await prisma.plant.update({ where: { id: plantId }, data: { imageUrl: null } })
+  return Response.json({ imageUrl: null })
 }
