@@ -227,11 +227,18 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (!plant) return Response.json({ error: "Plant not found." }, { status: 404 })
 
   if (new URL(request.url).searchParams.get("weight") === "latest") {
-    const latestWeight = await prisma.weightLog.findFirst({ where: { plantId }, orderBy: { date: "desc" } })
-    if (!latestWeight) return Response.json({ error: "No weight history to remove." }, { status: 404 })
+    const dateValue = new URL(request.url).searchParams.get("date")
+    const date = dateValue ? new Date(`${dateValue}T00:00:00.000Z`) : null
+    if (!dateValue || !/^\d{4}-\d{2}-\d{2}$/.test(dateValue) || !date || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== dateValue) {
+      return Response.json({ error: "A valid measurement date is required." }, { status: 400 })
+    }
 
-    await prisma.weightLog.delete({ where: { id: latestWeight.id } })
-    return Response.json({ date: latestWeight.date.toISOString() })
+    const deleted = await prisma.weightLog.deleteMany({
+      where: { plantId, date, weight: { not: null } },
+    })
+    if (deleted.count === 0) return Response.json({ error: "No measurement found for that date." }, { status: 404 })
+
+    return Response.json({ date: dateValue })
   }
 
   await prisma.plant.delete({ where: { id: plantId } })

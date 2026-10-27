@@ -64,7 +64,7 @@ export type Plant = {
   room: string
   minWeight: number
   maxWeight: number
-  history: { date: string; weight: number | null }[]
+  history: { date: string; dateValue?: string; weight: number | null }[]
 }
 
 export type ToleranceColor = "red" | "orange" | "green" | "blue"
@@ -332,7 +332,7 @@ function MondayCalendar({ value, onChange, disabled, compact = false, ariaLabel 
   )
 }
 
-function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryChange, onPlantUpdated, onEstimatedUpdated, onWeightsUpdated, onToleranceUpdated, onImageUploaded, onImageDeleted, onWeightAdded, onWeightRemoved, onPlantDeleted, onGroupWatered, onLastWateredChanged, onSeasonChanged }: { plants: Plant[]; groupDates: PersistedGroupDate[]; query: string; initialSeason: "summer" | "winter"; onQueryChange: (query: string) => void; onPlantUpdated: (plantId: number, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: number, interval: number | null) => void; onWeightsUpdated: (plantId: number, minWeight: number, maxWeight: number) => void; onToleranceUpdated: (plantId: number, season: "summer" | "winter", color: ToleranceColor) => void; onImageUploaded: (plantId: number, imageUrl: string) => void; onImageDeleted: (plantId: number) => void; onWeightAdded: (plantId: number, date: string, weight: number) => void; onWeightRemoved: (plantId: number, date: string) => void; onPlantDeleted: (plantId: number) => void; onGroupWatered: (plantId: number, season: "summer" | "winter") => Promise<string>; onLastWateredChanged: (plantId: number | null, season: "summer" | "winter", date: string | null, groupKey?: string) => Promise<string | null>; onSeasonChanged: (season: "summer" | "winter") => void }) {
+function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryChange, onPlantUpdated, onEstimatedUpdated, onWeightsUpdated, onToleranceUpdated, onImageUploaded, onImageDeleted, onWeightAdded, onWeightRemoved, onWeightRestored, onPlantDeleted, onGroupWatered, onLastWateredChanged, onSeasonChanged }: { plants: Plant[]; groupDates: PersistedGroupDate[]; query: string; initialSeason: "summer" | "winter"; onQueryChange: (query: string) => void; onPlantUpdated: (plantId: number, season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimatedUpdated: (plantId: number, interval: number | null) => void; onWeightsUpdated: (plantId: number, minWeight: number, maxWeight: number) => void; onToleranceUpdated: (plantId: number, season: "summer" | "winter", color: ToleranceColor) => void; onImageUploaded: (plantId: number, imageUrl: string) => void; onImageDeleted: (plantId: number) => void; onWeightAdded: (plantId: number, date: string, weight: number) => void; onWeightRemoved: (plantId: number, date: string) => void; onWeightRestored: (plantId: number, date: string, weight: number | null | undefined) => void; onPlantDeleted: (plantId: number) => void; onGroupWatered: (plantId: number, season: "summer" | "winter") => Promise<string>; onLastWateredChanged: (plantId: number | null, season: "summer" | "winter", date: string | null, groupKey?: string) => Promise<string | null>; onSeasonChanged: (season: "summer" | "winter") => void }) {
   const [lastWateredDates, setLastWateredDates] = useState<Record<string, Date | null>>(
     () => Object.fromEntries([
       ...scheduleGroups.map((group) => [wateringDateKey("summer", group.name), null]),
@@ -350,6 +350,7 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
   const [season, setSeason] = useState<"summer" | "winter">(initialSeason)
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const [wateringGroup, setWateringGroup] = useState<string | null>(null)
+  const [wateringError, setWateringError] = useState<string | null>(null)
   const [openTolerancePlantId, setOpenTolerancePlantId] = useState<number | null>(null)
 
   const updateLastWatered = (seasonName: "summer" | "winter", groupName: string, date: Date | null) => {
@@ -476,8 +477,16 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
                   const date = value ? parseInputDate(value) : null
                   const groupPlant = seasonPlants.find((plant) => plant.group === row.group)
                   const groupKey = row.group === "Unassigned" ? "unassigned" : row.group
-                  const savedDate = await onLastWateredChanged(groupPlant?.id ?? null, season, date ? date.toISOString().slice(0, 10) : null, groupPlant ? undefined : groupKey)
-                  updateLastWatered(season, row.group, savedDate ? new Date(savedDate) : null)
+                  const previousDate = lastWateredDates[wateringDateKey(season, row.group)] ?? null
+                  updateLastWatered(season, row.group, date)
+                  setWateringError(null)
+                  try {
+                    const savedDate = await onLastWateredChanged(groupPlant?.id ?? null, season, date ? date.toISOString().slice(0, 10) : null, groupPlant ? undefined : groupKey)
+                    updateLastWatered(season, row.group, savedDate ? new Date(savedDate) : null)
+                  } catch (error) {
+                    updateLastWatered(season, row.group, previousDate)
+                    setWateringError(error instanceof Error ? error.message : "Could not save watering date.")
+                  }
                 }}
                 compact
                 ariaLabel={`Set last watered date for ${row.group}`}
@@ -493,9 +502,17 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
                 const groupPlant = seasonPlants.find((plant) => plant.group === row.group)
                 if (!groupPlant) return
                 setWateringGroup(row.group)
+                const previousDate = lastWateredDates[wateringDateKey(season, row.group)] ?? null
+                const now = new Date()
+                const optimisticDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+                updateLastWatered(season, row.group, optimisticDate)
+                setWateringError(null)
                 try {
                   const date = await onGroupWatered(groupPlant.id, season)
                   updateLastWatered(season, row.group, new Date(date))
+                } catch (error) {
+                  updateLastWatered(season, row.group, previousDate)
+                  setWateringError(error instanceof Error ? error.message : "Could not record watering.")
                 } finally {
                   setWateringGroup(null)
                 }
@@ -525,9 +542,21 @@ function WateringSchedule({ plants, groupDates, query, initialSeason, onQueryCha
             </NextWateringColumn>
           )}
           </div>
-          {isExpanded && row.plants.length > 0 ? <div>{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} season={season} groupColor={groupColor} isToleranceOpen={openTolerancePlantId === plant.id} onToleranceOpenChange={(open) => setOpenTolerancePlantId(open ? plant.id : null)} lastWateredDate={plant.group === "Unassigned" ? plantLastWateredDates[plantWateringDateKey(season, plant.id)] ?? null : null} onLastWateredUpdated={plant.group === "Unassigned" ? async (date) => { const savedDate = await onLastWateredChanged(plant.id, season, date ? date.toISOString().slice(0, 10) : null); updatePlantLastWatered(season, plant.id, savedDate ? new Date(savedDate) : null) } : undefined} onUpdated={(season, nextGroup, wateringInterval) => onPlantUpdated(plant.id, season, nextGroup, wateringInterval)} onEstimateUpdated={(interval) => onEstimatedUpdated(plant.id, interval)} onWeightsUpdated={(minWeight, maxWeight) => onWeightsUpdated(plant.id, minWeight, maxWeight)} onToleranceUpdated={(color) => onToleranceUpdated(plant.id, season, color)} onImageUploaded={(imageUrl) => onImageUploaded(plant.id, imageUrl)} onImageDeleted={() => onImageDeleted(plant.id)} onWeightAdded={(date, weight) => onWeightAdded(plant.id, date, weight)} onWeightRemoved={(date) => onWeightRemoved(plant.id, date)} onDeleted={() => onPlantDeleted(plant.id)} />)}</div> : null}
+          {isExpanded && row.plants.length > 0 ? <div>{row.plants.map((plant) => <PlantCard key={plant.id} plant={plant} season={season} groupColor={groupColor} isToleranceOpen={openTolerancePlantId === plant.id} onToleranceOpenChange={(open) => setOpenTolerancePlantId(open ? plant.id : null)} lastWateredDate={plant.group === "Unassigned" ? plantLastWateredDates[plantWateringDateKey(season, plant.id)] ?? null : null} onLastWateredUpdated={plant.group === "Unassigned" ? async (date) => {
+            const previousDate = plantLastWateredDates[plantWateringDateKey(season, plant.id)] ?? null
+            updatePlantLastWatered(season, plant.id, date)
+            setWateringError(null)
+            try {
+              const savedDate = await onLastWateredChanged(plant.id, season, date ? date.toISOString().slice(0, 10) : null)
+              updatePlantLastWatered(season, plant.id, savedDate ? new Date(savedDate) : null)
+            } catch (error) {
+              updatePlantLastWatered(season, plant.id, previousDate)
+              setWateringError(error instanceof Error ? error.message : "Could not save watering date.")
+            }
+          } : undefined} onUpdated={(season, nextGroup, wateringInterval) => onPlantUpdated(plant.id, season, nextGroup, wateringInterval)} onEstimateUpdated={(interval) => onEstimatedUpdated(plant.id, interval)} onWeightsUpdated={(minWeight, maxWeight) => onWeightsUpdated(plant.id, minWeight, maxWeight)} onToleranceUpdated={(color) => onToleranceUpdated(plant.id, season, color)} onImageUploaded={(imageUrl) => onImageUploaded(plant.id, imageUrl)} onImageDeleted={() => onImageDeleted(plant.id)} onWeightAdded={(date, weight) => onWeightAdded(plant.id, date, weight)} onWeightRemoved={(date) => onWeightRemoved(plant.id, date)} onWeightRestored={(date, weight) => onWeightRestored(plant.id, date, weight)} onDeleted={() => onPlantDeleted(plant.id)} />)}</div> : null}
         </div>
       })}
+      {wateringError ? <p className="px-1 py-2 text-sm text-[#bd5b45]" role="alert">{wateringError}</p> : null}
       <div className="flex items-center justify-between gap-3 border-t border-[#d8dfd5] px-1 py-3">
         <span className="text-xs text-[#78847a]">Watering season</span>
         <button
@@ -577,7 +606,7 @@ function formatChartDate(value: string | number) {
   return `${day}.${month}`
 }
 
-function PlantHistory({ plant, onUpdated, onEstimateUpdated, onWeightsUpdated, onWeightAdded, onDeleted, onImageDeleted, onNameUpdated }: { plant: Plant; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightsUpdated: (minWeight: number, maxWeight: number) => void; onWeightAdded: (date: string, weight: number) => void; onDeleted: () => void; onImageDeleted: () => void; onNameUpdated: (name: string) => void }) {
+function PlantHistory({ plant, onUpdated, onEstimateUpdated, onWeightsUpdated, onWeightAdded, onWeightRestored, onDeleted, onImageDeleted, onNameUpdated }: { plant: Plant; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightsUpdated: (minWeight: number, maxWeight: number) => void; onWeightAdded: (date: string, weight: number) => void; onWeightRestored: (date: string, weight: number | null | undefined) => void; onDeleted: () => void; onImageDeleted: () => void; onNameUpdated: (name: string) => void }) {
   const [range, setRange] = useState({ startIndex: 0, endIndex: Math.max(0, plant.history.length - 1) })
   const [selectionStart, setSelectionStart] = useState<number | null>(null)
   const [selectionEnd, setSelectionEnd] = useState<number | null>(null)
@@ -686,6 +715,8 @@ function PlantHistory({ plant, onUpdated, onEstimateUpdated, onWeightsUpdated, o
 
     setMeasurementError(null)
     setIsSavingMeasurement(true)
+    const previousEntry = plant.history.find((entry) => entry.dateValue === measurementDate)
+    onWeightAdded(measurementDate, parsedWeight)
     try {
       const response = await fetch(`/api/plants/${plant.id}`, {
         method: "POST",
@@ -697,6 +728,7 @@ function PlantHistory({ plant, onUpdated, onEstimateUpdated, onWeightsUpdated, o
       onWeightAdded(result.date, result.weight)
       setMeasurementWeight("")
     } catch (saveError) {
+      onWeightRestored(measurementDate, previousEntry?.weight)
       setMeasurementError(saveError instanceof Error ? saveError.message : "Could not save measurement.")
     } finally {
       setIsSavingMeasurement(false)
@@ -1024,7 +1056,7 @@ function PlantScheduleEditor({ plant, onUpdated, onEstimateUpdated, onWeightsUpd
   )
 }
 
-function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpenChange, lastWateredDate, onLastWateredUpdated, onUpdated, onEstimateUpdated, onWeightsUpdated, onToleranceUpdated, onImageUploaded, onImageDeleted, onWeightAdded, onWeightRemoved, onDeleted, onNameUpdated }: { plant: Plant; season: "summer" | "winter"; groupColor: GroupColor; isToleranceOpen: boolean; onToleranceOpenChange: (open: boolean) => void; lastWateredDate: Date | null; onLastWateredUpdated?: (date: Date | null) => Promise<void>; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightsUpdated: (minWeight: number, maxWeight: number) => void; onToleranceUpdated: (color: ToleranceColor) => void; onImageUploaded: (imageUrl: string) => void; onImageDeleted: () => void; onWeightAdded: (date: string, weight: number) => void; onWeightRemoved: (date: string) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
+function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpenChange, lastWateredDate, onLastWateredUpdated, onUpdated, onEstimateUpdated, onWeightsUpdated, onToleranceUpdated, onImageUploaded, onImageDeleted, onWeightAdded, onWeightRemoved, onWeightRestored, onDeleted, onNameUpdated }: { plant: Plant; season: "summer" | "winter"; groupColor: GroupColor; isToleranceOpen: boolean; onToleranceOpenChange: (open: boolean) => void; lastWateredDate: Date | null; onLastWateredUpdated?: (date: Date | null) => Promise<void>; onUpdated: (season: "summer" | "winter", group: string, wateringInterval: number | null) => void; onEstimateUpdated: (interval: number | null) => void; onWeightsUpdated: (minWeight: number, maxWeight: number) => void; onToleranceUpdated: (color: ToleranceColor) => void; onImageUploaded: (imageUrl: string) => void; onImageDeleted: () => void; onWeightAdded: (date: string, weight: number) => void; onWeightRemoved: (date: string) => void; onWeightRestored: (date: string, weight: number | null | undefined) => void; onDeleted?: () => void; onNameUpdated?: (name: string) => void }) {
   const { current, percentage } = getMoisture(plant)
   const [weight, setWeight] = useState("")
   const [isSavingWeight, setIsSavingWeight] = useState(false)
@@ -1107,6 +1139,9 @@ function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpen
     const currentInput = event.currentTarget.querySelector<HTMLInputElement>("[data-weight-input]")
     const weightInputs = Array.from(document.querySelectorAll<HTMLInputElement>("[data-weight-input]"))
     const currentInputIndex = currentInput ? weightInputs.indexOf(currentInput) : -1
+    const date = new Date().toISOString().slice(0, 10)
+    const previousEntry = plant.history.find((entry) => entry.dateValue === date)
+    onWeightAdded(date, parsedWeight)
     try {
       const response = await fetch(`/api/plants/${plant.id}`, {
         method: "POST",
@@ -1124,6 +1159,7 @@ function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpen
         })
       }
     } catch (saveError) {
+      onWeightRestored(date, previousEntry?.weight)
       setWeightError(saveError instanceof Error ? saveError.message : "Could not save weight.")
     } finally {
       setIsSavingWeight(false)
@@ -1131,14 +1167,23 @@ function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpen
   }
   const removeLatestWeight = async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
+    const latestEntry = plant.history.findLast((entry) => entry.weight !== null)
+    if (!latestEntry?.dateValue) {
+      setWeightError("Could not determine the date of the latest measurement.")
+      return
+    }
     setIsRemovingWeight(true)
     setWeightError(null)
+    onWeightRemoved(latestEntry.dateValue)
     try {
-      const response = await fetch(`/api/plants/${plant.id}?weight=latest`, { method: "DELETE" })
+      const response = await fetch(`/api/plants/${plant.id}?weight=latest&date=${latestEntry.dateValue}`, { method: "DELETE" })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error ?? "Could not remove weight.")
-      onWeightRemoved(result.date)
+      if (typeof result.date !== "string") throw new Error("The server did not return the removed measurement date.")
+      const removedDate = result.date.slice(0, 10)
+      if (removedDate !== latestEntry.dateValue) throw new Error("The server removed a different measurement than expected.")
     } catch (removeError) {
+      onWeightRestored(latestEntry.dateValue, latestEntry.weight)
       setWeightError(removeError instanceof Error ? removeError.message : "Could not remove weight.")
     } finally {
       setIsRemovingWeight(false)
@@ -1530,6 +1575,7 @@ function PlantCard({ plant, season, groupColor, isToleranceOpen, onToleranceOpen
         onEstimateUpdated={onEstimateUpdated}
         onWeightsUpdated={onWeightsUpdated}
         onWeightAdded={onWeightAdded}
+        onWeightRestored={onWeightRestored}
         onDeleted={onDeleted ?? (() => window.location.reload())}
         onImageDeleted={onImageDeleted}
         onNameUpdated={onNameUpdated ?? (() => window.location.reload())}
@@ -1679,20 +1725,38 @@ export default function PlantDashboard({ plants, groupDates, lastUpdated, initia
   const [query, setQuery] = useState("")
 
   const addWeight = (plantId: number, date: string, weight: number) => {
+    const dateValue = date.slice(0, 10)
     setPlantList((current) => current.map((plant) => {
       if (plant.id !== plantId) return plant
-      const dateLabel = new Date(date).toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" })
-      const history = plant.history.some((entry) => entry.date === dateLabel)
-        ? plant.history.map((entry) => entry.date === dateLabel ? { ...entry, weight } : entry)
-        : [...plant.history, { date: dateLabel, weight }]
-      history.sort((firstEntry, secondEntry) => new Date(`${firstEntry.date}, ${new Date().getUTCFullYear()}`).getTime() - new Date(`${secondEntry.date}, ${new Date().getUTCFullYear()}`).getTime())
+      const dateLabel = new Date(`${dateValue}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" })
+      const history = plant.history.some((entry) => entry.dateValue === dateValue)
+        ? plant.history.map((entry) => entry.dateValue === dateValue ? { ...entry, weight } : entry)
+        : [...plant.history, { date: dateLabel, dateValue, weight }]
+      history.sort((firstEntry, secondEntry) => (firstEntry.dateValue ?? "").localeCompare(secondEntry.dateValue ?? ""))
       return { ...plant, history }
     }))
   }
 
   const removeWeight = (plantId: number, date: string) => {
-    const dateLabel = new Date(date).toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" })
-    setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, history: plant.history.filter((entry) => entry.date !== dateLabel) } : plant))
+    const dateValue = date.slice(0, 10)
+    setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, history: plant.history.filter((entry) => entry.dateValue !== dateValue) } : plant))
+  }
+
+  const restoreWeight = (plantId: number, date: string, weight: number | null | undefined) => {
+    const dateValue = date.slice(0, 10)
+    setPlantList((current) => current.map((plant) => {
+      if (plant.id !== plantId) return plant
+      const dateLabel = new Date(`${dateValue}T00:00:00.000Z`).toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" })
+      if (weight === undefined) {
+        return { ...plant, history: plant.history.filter((entry) => entry.dateValue !== dateValue) }
+      }
+      const existingEntry = plant.history.find((entry) => entry.dateValue === dateValue)
+      const history = existingEntry
+        ? plant.history.map((entry) => entry.dateValue === dateValue ? { ...entry, weight } : entry)
+        : [...plant.history, { date: dateLabel, dateValue, weight }]
+      history.sort((firstEntry, secondEntry) => (firstEntry.dateValue ?? "").localeCompare(secondEntry.dateValue ?? ""))
+      return { ...plant, history }
+    }))
   }
 
   const waterGroup = async (plantId: number, season: "summer" | "winter") => {
@@ -1727,7 +1791,7 @@ export default function PlantDashboard({ plants, groupDates, lastUpdated, initia
           if (plant.id !== plantId) return plant
           if (season === "winter") return { ...plant, winterGroup: nextGroup, winterWateringInterval: wateringInterval }
           return { ...plant, group: nextGroup, wateringInterval, room: wateringInterval ? `Every ${wateringInterval} days` : "No schedule" }
-        }))} onEstimatedUpdated={(plantId, interval) => setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, estimatedWateringInterval: interval } : plant))} onWeightAdded={addWeight} onWeightRemoved={removeWeight} /></section>
+        }))} onEstimatedUpdated={(plantId, interval) => setPlantList((current) => current.map((plant) => plant.id === plantId ? { ...plant, estimatedWateringInterval: interval } : plant))} onWeightAdded={addWeight} onWeightRemoved={removeWeight} onWeightRestored={restoreWeight} /></section>
         <footer className="flex flex-col justify-between gap-3 border-t border-[#e0e6dd] px-[50px] py-5 text-xs text-[#8b968d] sm:flex-row"><p className="flex items-center gap-2"><CalendarDays className="size-3.5" /> Weight history is your most reliable watering signal.</p><p className="flex items-center gap-1 text-[#6f896f]"><ArrowUpRight className="size-3.5" /> All systems growing</p></footer>
       </div>
     </main>

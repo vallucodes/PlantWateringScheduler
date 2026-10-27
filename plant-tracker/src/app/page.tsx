@@ -25,6 +25,7 @@ function buildHistory(weightLogs: { date: Date; weight: number | null }[]) {
         day: "2-digit",
         timeZone: "UTC",
       }),
+      dateValue: dateKey,
       weight: weightsByDate.get(dateKey) ?? null,
     })
   }
