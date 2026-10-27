@@ -566,7 +566,8 @@ function getWeightAxis(dataMin: number, dataMax: number) {
 }
 
 function parseChartDate(value: string) {
-  return new Date(`${value}, ${new Date().getUTCFullYear()}`).getTime()
+  const parsedDate = new Date(`${value}, ${new Date().getUTCFullYear()}`)
+  return Date.UTC(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate())
 }
 
 function formatChartDate(value: string | number) {
